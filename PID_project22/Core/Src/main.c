@@ -43,6 +43,59 @@ UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 
+	// time
+float dt = 0;
+
+
+
+	//position
+// PID position term
+float P_position_term = 0;
+float I_position_term = 0;
+float D_position_term = 0;
+
+// constant
+float Kp_position = 0;
+float Ki_position = 0;
+float Kd_position = 0;
+
+// error of position
+float error_position = 0;
+
+// position
+float position_now = 0;
+float position_past = 0;
+float position_setpoint = 0;
+
+//integrate position
+float integrate_position = 0;
+float PID_position_total = 0;
+float Duty_feedback_position = 0;
+
+
+
+	//velocity
+// PID velocity term
+float P_velocity_term = 0;
+float I_velocity_term = 0;
+float D_velocity_term = 0;
+
+// constant
+float Kp_velocity = 0;
+float Ki_velocity = 0;
+float Kd_velocity = 0;
+
+// error of velocity
+float error_velocity = 0;
+
+//integrate velocity
+float integrate_velocity = 0;
+float PID_velocity_total = 0;
+float Duty_feedback_velocity = 0;
+
+
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -215,6 +268,68 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+void PositionControlPID()
+{
+	// P-term-position
+	P_position_term = Kp_position * error;
+
+	// I-term-position
+	if(position_now == position_setpoint) integrate_position = 0;
+	else integrate_position += (error_position * dt);
+	I_position_term = Ki_position * integrate_position;
+
+	// D-term-position
+	D_position_term = Kd_position * (error_position / dt);
+
+	// PID-position
+	PID_position_total = P_position_term + I_position_term + D_position_term;
+}
+
+
+void VelocityControlPID()
+{
+	// P-term-velocity
+	P_velocity_term = Kp_velocity * error;
+
+	// I-term-velocity
+	if(velocity_now == velocity_setpoint) integrate_velocity = 0;
+	else integrate_velocity += (error_velocity * dt);
+	I_velocity_term = Ki_velocity * integrate_velocity;
+
+	// D-term-velocity
+	D_velocity_term = Kd_velocity * (error_velocity / dt);
+
+	// PID-velocity
+	PID_velocity_total = P_velocity_term + I_velocity_term + D_velocity_term;
+
+	// saturation duty cycle
+	if(PID_velocity_total > 1000) PID_velocity_total = 1000;
+	else if(PID_velocity_total < -1000) PID_velocity_total = -1000;
+}
+
+
+void Drivemotor()
+{
+	if(Vfeedback >= 0)
+	{
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1,PID_velocity_total);
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2,0);
+	}
+	else if (Vfeedback < 0)
+	{
+		PID_velocity_total = PID_velocity_total*(-1);
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2,PID_velocity_total);
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1,0);
+	}
+
+}
+
+
+void Trajectory()
+{
+
+}
 
 /* USER CODE END 4 */
 
