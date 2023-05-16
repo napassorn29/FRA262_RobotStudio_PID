@@ -39,12 +39,17 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+TIM_HandleTypeDef htim1;
+TIM_HandleTypeDef htim3;
+TIM_HandleTypeDef htim5;
+
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 
 	// time
 float dt = 0;
+uint64_t _micros = 0;
 
 
 
@@ -81,8 +86,8 @@ float I_velocity_term = 0;
 float D_velocity_term = 0;
 
 // constant
-float Kp_velocity = 0;
-float Ki_velocity = 0;
+float Kp_velocity = 40;
+float Ki_velocity = 0.1;
 float Kd_velocity = 0;
 
 // error of velocity
@@ -93,6 +98,33 @@ float integrate_velocity = 0;
 float PID_velocity_total = 0;
 float Duty_feedback_velocity = 0;
 
+// velocity
+float velocity_now = 0;
+float velocity_past = 0;
+float velocity_setpoint = 0;
+
+
+
+
+
+
+//bababababa
+uint32_t QEIReadPosition;
+
+float duty = 500;
+int reset = 0;
+
+float BITtoDegree = 0;
+float DegreeOfMotor = 0;
+float setposition = 0;
+float Vfeedback = 0;
+
+typedef struct _QEIStructure
+{
+	float data[2];
+	float QETPosition;
+}QEIStructureTypedef;
+QEIStructureTypedef QEIData = {0};
 
 
 
@@ -102,7 +134,12 @@ float Duty_feedback_velocity = 0;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_TIM3_Init(void);
+static void MX_TIM1_Init(void);
+static void MX_TIM5_Init(void);
 /* USER CODE BEGIN PFP */
+
+inline uint64_t micros();
 
 /* USER CODE END PFP */
 
@@ -140,7 +177,19 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
+  MX_TIM3_Init();
+  MX_TIM1_Init();
+  MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
+
+  HAL_TIM_Base_Start(&htim1);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+
+  HAL_TIM_Base_Start(&htim1);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+
+  HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_1 | TIM_CHANNEL_2);
+
 
   /* USER CODE END 2 */
 
@@ -151,6 +200,29 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  static uint32_t timestamp = 0;
+	  int64_t currentTime = micros();
+	  if(HAL_GetTick() > timestamp)
+	  {
+		  timestamp = currentTime + 500;
+		  dt = 0.0005;
+		  QEIEncoderPosition();
+		  VelocityControlPID();
+		  Drivemotor();
+
+//		  PositionControlPID();
+//		  Drivemotor();
+	  }
+
+//	  static uint32_t timestamp = 0;
+//	  if(HAL_GetTick() > timestamp)
+//	  {
+//		  timestamp = HAL_GetTick() + 5;
+//		  dt = 0.005;
+//		  QEIEncoderPosition();
+//		  VelocityControlPID();
+//		  Drivemotor();
+//	  }
   }
   /* USER CODE END 3 */
 }
@@ -199,6 +271,169 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief TIM1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM1_Init(void)
+{
+
+  /* USER CODE BEGIN TIM1_Init 0 */
+
+  /* USER CODE END TIM1_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
+
+  /* USER CODE BEGIN TIM1_Init 1 */
+
+  /* USER CODE END TIM1_Init 1 */
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 83;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 999;
+  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim1.Init.RepetitionCounter = 0;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_PWM_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
+  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
+  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
+  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
+  sBreakDeadTimeConfig.DeadTime = 0;
+  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
+  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
+  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
+  if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM1_Init 2 */
+
+  /* USER CODE END TIM1_Init 2 */
+  HAL_TIM_MspPostInit(&htim1);
+
+}
+
+/**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_Encoder_InitTypeDef sConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 0;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 3071;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  sConfig.EncoderMode = TIM_ENCODERMODE_TI12;
+  sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
+  sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
+  sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
+  sConfig.IC1Filter = 0;
+  sConfig.IC2Polarity = TIM_ICPOLARITY_RISING;
+  sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
+  sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
+  sConfig.IC2Filter = 0;
+  if (HAL_TIM_Encoder_Init(&htim3, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
+
+}
+
+/**
+  * @brief TIM5 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM5_Init(void)
+{
+
+  /* USER CODE BEGIN TIM5_Init 0 */
+
+  /* USER CODE END TIM5_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM5_Init 1 */
+
+  /* USER CODE END TIM5_Init 1 */
+  htim5.Instance = TIM5;
+  htim5.Init.Prescaler = 83;
+  htim5.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim5.Init.Period = 4294967295;
+  htim5.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim5.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim5) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim5, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim5, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM5_Init 2 */
+
+  /* USER CODE END TIM5_Init 2 */
+
 }
 
 /**
@@ -269,28 +504,63 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-void PositionControlPID()
+void QEIEncoderPosition()
 {
-	// P-term-position
-	P_position_term = Kp_position * error;
+	QEIReadPosition = __HAL_TIM_GET_COUNTER(&htim3);
+	BITtoDegree = (QEIReadPosition*360.0)/3072.0;
 
-	// I-term-position
-	if(position_now == position_setpoint) integrate_position = 0;
-	else integrate_position += (error_position * dt);
-	I_position_term = Ki_position * integrate_position;
+	//collect data
+	QEIData.data[0] = BITtoDegree;
 
-	// D-term-position
-	D_position_term = Kd_position * (error_position / dt);
+	//calculation
+	float diffposition = QEIData.data[0]-QEIData.data[1];
 
-	// PID-position
-	PID_position_total = P_position_term + I_position_term + D_position_term;
+	//handle wrap-around
+	if(diffposition > 180)
+	{
+		diffposition = diffposition - 360.0;
+		velocity_now = velocity_now + diffposition;
+	}
+	else if(diffposition< -180)
+	{
+		diffposition = diffposition + 360.0;
+		velocity_now = velocity_now + diffposition;
+	}
+	else
+	{
+		velocity_now = velocity_now + diffposition;
+	}
+	QEIData.data[1] = QEIData.data[0];
 }
+
+
+
+//void PositionControlPID()
+//{
+//	error = position_setpoint - position_now;
+//
+//	// P-term-position
+//	P_position_term = Kp_position * error;
+//
+//	// I-term-position
+//	if(position_now == position_setpoint) integrate_position = 0;
+//	else integrate_position += (error_position * dt);
+//	I_position_term = Ki_position * integrate_position;
+//
+//	// D-term-position
+//	D_position_term = Kd_position * (error_position / dt);
+//
+//	// PID-position
+//	PID_position_total = P_position_term + I_position_term + D_position_term;
+//}
 
 
 void VelocityControlPID()
 {
+	error_velocity = velocity_setpoint - velocity_now;
+
 	// P-term-velocity
-	P_velocity_term = Kp_velocity * error;
+	P_velocity_term = Kp_velocity * error_velocity;
 
 	// I-term-velocity
 	if(velocity_now == velocity_setpoint) integrate_velocity = 0;
@@ -298,7 +568,7 @@ void VelocityControlPID()
 	I_velocity_term = Ki_velocity * integrate_velocity;
 
 	// D-term-velocity
-	D_velocity_term = Kd_velocity * (error_velocity / dt);
+	D_velocity_term = Kd_velocity * error_velocity / dt;
 
 	// PID-velocity
 	PID_velocity_total = P_velocity_term + I_velocity_term + D_velocity_term;
@@ -309,14 +579,15 @@ void VelocityControlPID()
 }
 
 
+
 void Drivemotor()
 {
-	if(Vfeedback >= 0)
+	if(PID_velocity_total >= 0)
 	{
 		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1,PID_velocity_total);
 		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2,0);
 	}
-	else if (Vfeedback < 0)
+	else if (PID_velocity_total < 0)
 	{
 		PID_velocity_total = PID_velocity_total*(-1);
 		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2,PID_velocity_total);
@@ -326,9 +597,23 @@ void Drivemotor()
 }
 
 
-void Trajectory()
-{
+//void Trajectory()
+//{
+//
+//}
 
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+	if(htim == &htim5)
+	{
+		_micros += UINT32_MAX;
+	}
+}
+
+uint64_t micros()
+{
+	return __HAL_TIM_GET_COUNTER(&htim5)+_micros;
 }
 
 /* USER CODE END 4 */
