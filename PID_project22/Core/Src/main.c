@@ -563,7 +563,7 @@ void VelocityControlPID()
 	P_velocity_term = Kp_velocity * error_velocity;
 
 	// I-term-velocity
-	if(velocity_now == velocity_setpoint) integrate_velocity = 0;
+	if(velocity_setpoint - 0.1 < velocity_now < velocity_setpoint + 0.1) integrate_velocity = 0;
 	else integrate_velocity += (error_velocity * dt);
 	I_velocity_term = Ki_velocity * integrate_velocity;
 
@@ -574,8 +574,16 @@ void VelocityControlPID()
 	PID_velocity_total = P_velocity_term + I_velocity_term + D_velocity_term;
 
 	// saturation duty cycle
-	if(PID_velocity_total > 1000) PID_velocity_total = 1000;
-	else if(PID_velocity_total < -1000) PID_velocity_total = -1000;
+	if(PID_velocity_total > 1000)
+	{
+		PID_velocity_total = 1000;
+		integrate_velocity = 0;
+	}
+	else if(PID_velocity_total < -1000)
+	{
+		PID_velocity_total = -1000;
+		integrate_velocity += (error_velocity *dt);
+	}
 }
 
 
@@ -593,7 +601,6 @@ void Drivemotor()
 		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2,PID_velocity_total);
 		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1,0);
 	}
-
 }
 
 
