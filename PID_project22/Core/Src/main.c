@@ -118,12 +118,12 @@ float distance_one_travel = 0;
 
 // velocity
 float rpm = 0;
-float velocity_max = 232;
+float velocity_max = 100;
 float velocity_start = 0;
 float velocity_end = 0;
 
 // acceleration
-float acceleration_max = 1500;
+float acceleration_max = 300;
 
 // time
 float time_acc = 0;
@@ -131,7 +131,7 @@ float time_const = 0;
 float time_dec = 0;
 float time_total = 0;
 float time_now = 0;
-uint64_t time_trajectory = 0;
+float time_trajectory = 0;
 
 
 
@@ -599,7 +599,7 @@ void VelocityControlPID()
 	P_velocity_term = Kp_velocity * error_velocity;
 
 	// I-term-velocity
-	if(velocity_setpoint - 0.1 < velocity_now < velocity_setpoint + 0.1) integrate_velocity = 0;
+	if((velocity_setpoint - 0.1 < velocity_now) && (velocity_now< velocity_setpoint + 0.1)) integrate_velocity = 0;
 	else integrate_velocity += (error_velocity * dt);
 	I_velocity_term = Ki_velocity * integrate_velocity;
 
@@ -648,7 +648,7 @@ void Trajectory()
 	time_total = time_acc + time_const + time_dec;
 
 	// acceleration segment
-	if (0 <= time_trajectory < time_acc)
+	if ((0 <= time_trajectory) && (time_trajectory< time_acc))
 	{
 		time_trajectory += 0.0005;
 		time_now = time_trajectory;
@@ -666,7 +666,7 @@ void Trajectory()
 	}
 
 	// constant segment
-	else if (time_acc <= time_trajectory < (time_acc + time_const))
+	else if ((time_acc <= time_trajectory) && (time_trajectory < (time_acc + time_const)))
 	{
 		time_trajectory += 0.0005;
 		time_now = time_trajectory - time_acc;
@@ -684,7 +684,7 @@ void Trajectory()
 	}
 
 	// deceleration segment
-	else if ((time_acc + time_const) <= time_trajectory <= time_total)
+	else if (((time_acc + time_const) <= time_trajectory) && (time_trajectory<= time_total))
 	{
 		time_trajectory += 0.0005;
 		time_now = time_trajectory - (time_acc + time_const);
@@ -701,7 +701,9 @@ void Trajectory()
 		}
 	}
 
-	if (distance_one_travel-0.2< position_now <distance_one_travel+0.2)
+
+
+	if ((distance_one_travel-0.2< position_now) && ( position_now<distance_one_travel+0.2))
 	{
 		time_trajectory = 0;
 	}
