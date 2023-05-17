@@ -114,7 +114,7 @@ float position_now_acc = 0;
 float position_now_const = 0;
 float position_now_dec = 0;
 float position_segment = 0;
-float distance_one_travel = 0;
+float distance_one_travel = 2000;
 
 // velocity
 float rpm = 0;
@@ -123,7 +123,7 @@ float velocity_start = 0;
 float velocity_end = 0;
 
 // acceleration
-float acceleration_max = 300;
+float acceleration_max = 200;
 
 // time
 float time_acc = 0;
