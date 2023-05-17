@@ -105,11 +105,42 @@ float velocity_setpoint = 0;
 
 
 
+	// trajectory
+// position
+float position_acc = 0;
+float position_const = 0;
+float position_dec = 0;
+float position_now_acc = 0;
+float position_now_const = 0;
+float position_now_dec = 0;
+float position_segment = 0;
+float distance_one_travel = 0;
+
+// velocity
+float rpm = 0;
+float velocity_max = 232;
+float velocity_start = 0;
+float velocity_end = 0;
+
+// acceleration
+float acceleration_max = 1500;
+
+// time
+float time_acc = 0;
+float time_const = 0;
+float time_dec = 0;
+float time_total = 0;
+float time_now = 0;
+uint64_t time_trajectory = 0;
+
+
 
 
 
 //bababababa
 uint32_t QEIReadPosition;
+
+float velocity_check = 0;
 
 float duty = 500;
 int reset = 0;
@@ -125,6 +156,9 @@ typedef struct _QEIStructure
 	float QETPosition;
 }QEIStructureTypedef;
 QEIStructureTypedef QEIData = {0};
+
+float one = 0;
+float two = 0;
 
 
 
@@ -202,10 +236,12 @@ int main(void)
     /* USER CODE BEGIN 3 */
 	  static uint32_t timestamp = 0;
 	  int64_t currentTime = micros();
+//	  int64_t trajectory_time = currentTime;
 	  if(HAL_GetTick() > timestamp)
 	  {
 		  timestamp = currentTime + 500;
 		  dt = 0.0005;
+		  Trajectory();
 		  QEIEncoderPosition();
 		  VelocityControlPID();
 		  Drivemotor();
@@ -604,10 +640,74 @@ void Drivemotor()
 }
 
 
-//void Trajectory()
-//{
-//
-//}
+void Trajectory()
+{
+	time_acc = ((velocity_max - 0)/acceleration_max);
+	time_const = ((1.0/velocity_max)*((distance_one_travel)-((velocity_max*velocity_max)/acceleration_max)));
+	time_dec = ((0 - velocity_max)/(-acceleration_max));
+	time_total = time_acc + time_const + time_dec;
+
+	// acceleration segment
+	if (0 <= time_trajectory < time_acc)
+	{
+		time_trajectory += 0.0005;
+		time_now = time_trajectory;
+		position_segment = (velocity_start * time_now) + (1.0/2.0 * acceleration_max * (time_now*time_now));
+		if(distance_one_travel >= 0)
+		{
+			position_now_acc = position_now_dec + position_segment;
+			position_setpoint = position_now_dec + position_segment;
+		}
+		else if (distance_one_travel <= 0)
+		{
+			position_now_acc = position_now_dec - position_segment;
+			position_setpoint = position_now_dec - position_segment;
+		}
+	}
+
+	// constant segment
+	else if (time_acc <= time_trajectory < (time_acc + time_const))
+	{
+		time_trajectory += 0.0005;
+		time_now = time_trajectory - time_acc;
+		position_segment = (velocity_max * time_now);
+		if(distance_one_travel >= 0)
+		{
+            position_now_const = position_now_acc + position_segment;
+            position_setpoint = position_now_acc + position_segment;
+		}
+		else if (distance_one_travel <= 0)
+		{
+            position_now_const = position_now_acc - position_segment;
+            position_setpoint = position_now_acc - position_segment;
+		}
+	}
+
+	// deceleration segment
+	else if ((time_acc + time_const) <= time_trajectory <= time_total)
+	{
+		time_trajectory += 0.0005;
+		time_now = time_trajectory - (time_acc + time_const);
+		position_segment = (velocity_max * time_now) + (1/2 * -acceleration_max * (time_now * time_now));
+		if(distance_one_travel >= 0)
+		{
+			position_now_dec = position_now_const + position_segment;
+			position_setpoint = position_now_const + position_segment;
+		}
+		else if (distance_one_travel <= 0)
+		{
+			position_now_dec = position_now_const - position_segment;
+			position_setpoint = position_now_const - position_segment;
+		}
+	}
+
+	if (distance_one_travel-0.2< position_now <distance_one_travel+0.2)
+	{
+		time_trajectory = 0;
+	}
+
+	velocity_setpoint = position_setpoint;
+}
 
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
