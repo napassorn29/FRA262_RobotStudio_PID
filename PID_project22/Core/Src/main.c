@@ -86,7 +86,7 @@ float I_velocity_term = 0;
 float D_velocity_term = 0;
 
 // constant
-float Kp_velocity = 20;
+float Kp_velocity = 30;
 float Ki_velocity = 0.1;
 float Kd_velocity = 0;
 
@@ -114,16 +114,17 @@ float position_now_acc = 0;
 float position_now_const = 0;
 float position_now_dec = 0;
 float position_segment = 0;
-float distance_one_travel = 360;
+float distance_one_travel = -360;
+float abs_distance_one_travel = 0;
 
 // velocity
 float rpm = 0;
-float velocity_max = 100;
+float velocity_max = 50;
 float velocity_start = 0;
 float velocity_end = 0;
 
 // acceleration
-float acceleration_max = 200;
+float acceleration_max = 100;
 
 // time
 float time_acc = 0;
@@ -239,8 +240,8 @@ int main(void)
 //	  int64_t trajectory_time = currentTime;
 	  if(HAL_GetTick() > timestamp)
 	  {
-		  timestamp = currentTime + 500;
-		  dt = 0.0005;
+		  timestamp = currentTime + 100;
+		  dt = 0.0001;
 		  Trajectory();
 		  QEIEncoderPosition();
 		  VelocityControlPID();
@@ -624,7 +625,7 @@ void VelocityControlPID()
 	else if(PID_velocity_total < -1000)
 	{
 		PID_velocity_total = -1000;
-		integrate_velocity += (error_velocity *dt);
+		integrate_velocity += (error_velocity * dt);
 	}
 }
 
@@ -648,17 +649,19 @@ void Drivemotor()
 
 void Trajectory()
 {
+	if (distance_one_travel >= 0) abs_distance_one_travel = distance_one_travel;
+	else if (distance_one_travel < 0) abs_distance_one_travel = distance_one_travel*(-1);
 	time_acc = ((velocity_max - 0)/acceleration_max);
-	time_const = ((1.0/velocity_max)*((distance_one_travel)-((velocity_max*velocity_max)/acceleration_max)));
-	time_dec = ((0 - velocity_max)/(-acceleration_max));
+	time_const = ((1.0/velocity_max)*((abs_distance_one_travel)-((velocity_max*velocity_max)/acceleration_max)));
+	time_dec = ((0 - velocity_max)/((-1)*acceleration_max));
 	time_total = time_acc + time_const + time_dec;
 
 	// acceleration segment
-	if ((0 <= time_trajectory) && (time_trajectory< time_acc))
+	if ((0 <= time_trajectory) && (time_trajectory < time_acc))
 	{
-		time_trajectory += 0.0005;
+		time_trajectory += 0.0001;
 		time_now = time_trajectory;
-		position_segment = (velocity_start * time_now) + (1.0/2.0 * acceleration_max * (time_now*time_now));
+		position_segment = (velocity_start * time_now) + (1/2 * acceleration_max * (time_now * time_now));
 		if(distance_one_travel >= 0)
 		{
 			position_now_acc = position_now_dec + position_segment;
@@ -674,7 +677,7 @@ void Trajectory()
 	// constant segment
 	else if ((time_acc <= time_trajectory) && (time_trajectory < (time_acc + time_const)))
 	{
-		time_trajectory += 0.0005;
+		time_trajectory += 0.0001;
 		time_now = time_trajectory - time_acc;
 		position_segment = (velocity_max * time_now);
 		if(distance_one_travel >= 0)
@@ -692,9 +695,9 @@ void Trajectory()
 	// deceleration segment
 	else if (((time_acc + time_const) <= time_trajectory) && (time_trajectory<= time_total))
 	{
-		time_trajectory += 0.0005;
+		time_trajectory += 0.0001;
 		time_now = time_trajectory - (time_acc + time_const);
-		position_segment = (velocity_max * time_now) + (1/2 * -acceleration_max * (time_now * time_now));
+		position_segment = (velocity_max * time_now) + (1/2 * (-1)*acceleration_max * (time_now * time_now));
 		if(distance_one_travel >= 0)
 		{
 			position_now_dec = position_now_const + position_segment;
