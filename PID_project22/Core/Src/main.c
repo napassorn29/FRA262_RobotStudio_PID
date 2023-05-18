@@ -86,7 +86,7 @@ float I_velocity_term = 0;
 float D_velocity_term = 0;
 
 // constant
-float Kp_velocity = 40;
+float Kp_velocity = 20;
 float Ki_velocity = 0.1;
 float Kd_velocity = 0;
 
@@ -114,7 +114,7 @@ float position_now_acc = 0;
 float position_now_const = 0;
 float position_now_dec = 0;
 float position_segment = 0;
-float distance_one_travel = 2000;
+float distance_one_travel = 360;
 
 // velocity
 float rpm = 0;
@@ -599,8 +599,14 @@ void VelocityControlPID()
 	P_velocity_term = Kp_velocity * error_velocity;
 
 	// I-term-velocity
-	if((velocity_setpoint - 0.1 < velocity_now) && (velocity_now< velocity_setpoint + 0.1)) integrate_velocity = 0;
-	else integrate_velocity += (error_velocity * dt);
+	if(((distance_one_travel - 0.1) < velocity_now) && (velocity_now < (distance_one_travel + 0.1)))
+		{
+			integrate_velocity = 0;
+		}
+	else
+		{
+		integrate_velocity += (error_velocity * dt);
+		}
 	I_velocity_term = Ki_velocity * integrate_velocity;
 
 	// D-term-velocity
