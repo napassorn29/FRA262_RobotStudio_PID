@@ -572,42 +572,48 @@ void QEIEncoderPosition()
 
 
 
-//void PositionControlPID()
-//{
-//	error = position_setpoint - position_now;
-//
-//	// P-term-position
-//	P_position_term = Kp_position * error;
-//
-//	// I-term-position
-//	if(position_now == position_setpoint) integrate_position = 0;
-//	else integrate_position += (error_position * dt);
-//	I_position_term = Ki_position * integrate_position;
-//
-//	// D-term-position
-//	D_position_term = Kd_position * (error_position / dt);
-//
-//	// PID-position
-//	PID_position_total = P_position_term + I_position_term + D_position_term;
-//}
+void PositionControlPID()
+{
+	error_position = position_setpoint - position_now;
+
+	// P-term-position
+	P_position_term = Kp_position * error_position;
+
+	// I-term-position
+	if(((distance_one_travel - 0.1) < position_now) && (position_now < (distance_one_travel + 0.1)))
+		{
+		integrate_position = 0;
+		}
+	else
+		{
+		integrate_position += (error_position * dt);
+		}
+	I_position_term = Ki_position * integrate_position;
+
+	// D-term-position
+	D_position_term = Kd_position * (error_position / dt);
+
+	// PID-position
+	PID_position_total = P_position_term + I_position_term + D_position_term;
+}
 
 
 void VelocityControlPID()
 {
-	error_velocity = velocity_setpoint - velocity_now;
+	error_velocity = velocity_setpoint + PID_position_total - velocity_now;
 
 	// P-term-velocity
 	P_velocity_term = Kp_velocity * error_velocity;
 
 	// I-term-velocity
-	if(((distance_one_travel - 0.1) < velocity_now) && (velocity_now < (distance_one_travel + 0.1)))
-		{
-			integrate_velocity = 0;
-		}
+	if(((velocity_end - 0.1) < velocity_now) && (velocity_now < (velocity_end + 0.1)) && ((time_trajectory - 0.01) < time_total) && (time_total < (time_trajectory + 0.01)))
+	{
+		integrate_velocity = 0;
+	}
 	else
-		{
+	{
 		integrate_velocity += (error_velocity * dt);
-		}
+	}
 	I_velocity_term = Ki_velocity * integrate_velocity;
 
 	// D-term-velocity
@@ -627,6 +633,8 @@ void VelocityControlPID()
 		PID_velocity_total = -1000;
 		integrate_velocity += (error_velocity * dt);
 	}
+
+	position_now = velocity_now * dt;
 }
 
 
@@ -666,11 +674,15 @@ void Trajectory()
 		{
 			position_now_acc = position_now_dec + position_segment;
 			position_setpoint = position_now_dec + position_segment;
+
+			velocity_setpoint = (acceleration_max * time_now) + velocity_start;
 		}
 		else if (distance_one_travel <= 0)
 		{
 			position_now_acc = position_now_dec - position_segment;
 			position_setpoint = position_now_dec - position_segment;
+
+			velocity_setpoint = ((-1)*acceleration_max * time_now) - velocity_start;
 		}
 	}
 
@@ -684,11 +696,15 @@ void Trajectory()
 		{
             position_now_const = position_now_acc + position_segment;
             position_setpoint = position_now_acc + position_segment;
+
+            velocity_setpoint = velocity_max;
 		}
 		else if (distance_one_travel <= 0)
 		{
             position_now_const = position_now_acc - position_segment;
             position_setpoint = position_now_acc - position_segment;
+
+            velocity_setpoint = (-1)*velocity_max;
 		}
 	}
 
@@ -702,11 +718,15 @@ void Trajectory()
 		{
 			position_now_dec = position_now_const + position_segment;
 			position_setpoint = position_now_const + position_segment;
+
+			velocity_setpoint = ((-1)*acceleration_max * time_now) + velocity_max;
 		}
 		else if (distance_one_travel <= 0)
 		{
 			position_now_dec = position_now_const - position_segment;
 			position_setpoint = position_now_const - position_segment;
+
+			velocity_setpoint = (acceleration_max * time_now) - velocity_max;
 		}
 	}
 
@@ -717,8 +737,21 @@ void Trajectory()
 		time_trajectory = 0;
 	}
 
-	velocity_setpoint = position_setpoint;
 }
+
+void Cascade_control_loop()
+{
+	Trajectory();
+	PositionControlPID();
+
+}
+
+
+void integrate_velocity()
+{
+	position_now = velocity_now * dt;
+}
+
 
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
