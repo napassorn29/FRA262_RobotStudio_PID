@@ -22,6 +22,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
+#include "user_function.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -161,6 +163,12 @@ QEIStructureTypedef QEIData = {0};
 float one = 0;
 float two = 0;
 
+float filter_position_past = 0;
+float filter_position_now = 0;
+float filter_velocity = 0;
+
+float C = 0;
+
 
 
 /* USER CODE END PV */
@@ -190,6 +198,9 @@ inline uint64_t micros();
 int main(void)
 {
   /* USER CODE BEGIN 1 */
+
+//	C = ComputeLowpassConstant(4000, 5000);
+	// C1 = ComputeLowpassConstant(1000, 5000);
 
   /* USER CODE END 1 */
 
@@ -237,18 +248,16 @@ int main(void)
     /* USER CODE BEGIN 3 */
 	  static uint32_t timestamp = 0;
 	  int64_t currentTime = micros();
-//	  int64_t trajectory_time = currentTime;
 	  if(HAL_GetTick() > timestamp)
 	  {
 		  timestamp = currentTime + 100;
 		  dt = 0.0001;
 		  Trajectory();
+//		  PositionControlPID();
 		  QEIEncoderPosition();
 		  VelocityControlPID();
 		  Drivemotor();
 
-//		  PositionControlPID();
-//		  Drivemotor();
 	  }
 
 //	  static uint32_t timestamp = 0;
@@ -567,7 +576,13 @@ void QEIEncoderPosition()
 	{
 		velocity_now = velocity_now + diffposition;
 	}
+
+	//velocity_check = ((QEIData.data[0]-QEIData.data[1]) * 1000000)/100;
+	//velocity_now = (C * velocity_check) + ((1-C)*velocity_now);
+	//velocity_now = position_now;
 	QEIData.data[1] = QEIData.data[0];
+
+
 }
 
 
@@ -598,15 +613,19 @@ void PositionControlPID()
 }
 
 
+
+
 void VelocityControlPID()
 {
 	error_velocity = velocity_setpoint + PID_position_total - velocity_now;
+	//+ PID_position_total
 
 	// P-term-velocity
 	P_velocity_term = Kp_velocity * error_velocity;
 
 	// I-term-velocity
-	if(((velocity_end - 0.1) < velocity_now) && (velocity_now < (velocity_end + 0.1)) && ((time_trajectory - 0.01) < time_total) && (time_total < (time_trajectory + 0.01)))
+	if(((distance_one_travel - 0.1) < velocity_now) && (velocity_now < (distance_one_travel + 0.1)))
+	//(((velocity_end - 0.1) < velocity_now) && (velocity_now < (velocity_end + 0.1))&& ((time_trajectory - 0.01) < time_total) && (time_total < (time_trajectory + 0.01)))
 	{
 		integrate_velocity = 0;
 	}
@@ -634,7 +653,6 @@ void VelocityControlPID()
 		integrate_velocity += (error_velocity * dt);
 	}
 
-	position_now = velocity_now * dt;
 }
 
 
@@ -675,14 +693,14 @@ void Trajectory()
 			position_now_acc = position_now_dec + position_segment;
 			position_setpoint = position_now_dec + position_segment;
 
-			velocity_setpoint = (acceleration_max * time_now) + velocity_start;
+			//velocity_setpoint = (acceleration_max * time_now) + velocity_start;
 		}
 		else if (distance_one_travel <= 0)
 		{
 			position_now_acc = position_now_dec - position_segment;
 			position_setpoint = position_now_dec - position_segment;
 
-			velocity_setpoint = ((-1)*acceleration_max * time_now) - velocity_start;
+			//velocity_setpoint = ((-1)*acceleration_max * time_now) - velocity_start;
 		}
 	}
 
@@ -697,14 +715,14 @@ void Trajectory()
             position_now_const = position_now_acc + position_segment;
             position_setpoint = position_now_acc + position_segment;
 
-            velocity_setpoint = velocity_max;
+            //velocity_setpoint = velocity_max;
 		}
 		else if (distance_one_travel <= 0)
 		{
             position_now_const = position_now_acc - position_segment;
             position_setpoint = position_now_acc - position_segment;
 
-            velocity_setpoint = (-1)*velocity_max;
+            //velocity_setpoint = (-1) * velocity_max;
 		}
 	}
 
@@ -719,14 +737,14 @@ void Trajectory()
 			position_now_dec = position_now_const + position_segment;
 			position_setpoint = position_now_const + position_segment;
 
-			velocity_setpoint = ((-1)*acceleration_max * time_now) + velocity_max;
+			//velocity_setpoint = ((-1)*acceleration_max * time_now) + velocity_max;
 		}
 		else if (distance_one_travel <= 0)
 		{
 			position_now_dec = position_now_const - position_segment;
 			position_setpoint = position_now_const - position_segment;
 
-			velocity_setpoint = (acceleration_max * time_now) - velocity_max;
+			//velocity_setpoint = (acceleration_max * time_now) - velocity_max;
 		}
 	}
 
@@ -737,20 +755,10 @@ void Trajectory()
 		time_trajectory = 0;
 	}
 
-}
-
-void Cascade_control_loop()
-{
-	Trajectory();
-	PositionControlPID();
-
+	velocity_setpoint = position_setpoint;
 }
 
 
-void integrate_velocity()
-{
-	position_now = velocity_now * dt;
-}
 
 
 
