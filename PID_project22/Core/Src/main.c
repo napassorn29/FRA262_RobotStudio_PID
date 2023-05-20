@@ -23,6 +23,7 @@
 /* USER CODE BEGIN Includes */
 
 #include "user_function.h"
+#include "math.h"
 
 /* USER CODE END Includes */
 
@@ -41,7 +42,10 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+ADC_HandleTypeDef hadc1;
+
 TIM_HandleTypeDef htim1;
+TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim5;
 
@@ -88,8 +92,8 @@ float I_velocity_term = 0;
 float D_velocity_term = 0;
 
 // constant
-float Kp_velocity = 30;
-float Ki_velocity = 0.1;
+float Kp_velocity = 0.05;
+float Ki_velocity = 0;
 float Kd_velocity = 0;
 
 // error of velocity
@@ -116,17 +120,18 @@ float position_now_acc = 0;
 float position_now_const = 0;
 float position_now_dec = 0;
 float position_segment = 0;
-float distance_one_travel = -360;
+float distance_one_travel = 0;
 float abs_distance_one_travel = 0;
 
 // velocity
 float rpm = 0;
-float velocity_max = 50;
+float velocity_max = 10000;
 float velocity_start = 0;
 float velocity_end = 0;
+float velocity_triangle = 0;
 
 // acceleration
-float acceleration_max = 100;
+float acceleration_max = 5000;
 
 // time
 float time_acc = 0;
@@ -135,8 +140,12 @@ float time_dec = 0;
 float time_total = 0;
 float time_now = 0;
 float time_trajectory = 0;
+int sign_of_distance = 0;
 
 
+
+float setpoint_past = 0;
+float setpoint_now = 0;
 
 
 
@@ -169,7 +178,9 @@ float filter_velocity = 0;
 
 float C = 0;
 
-
+int32_t QEIReadRaw;
+float voltage = 0;
+int32_t setpoint = 0;
 
 /* USER CODE END PV */
 
@@ -180,9 +191,13 @@ static void MX_USART2_UART_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM5_Init(void);
+static void MX_ADC1_Init(void);
+static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 
 inline uint64_t micros();
+void motor(float voltage);
+
 
 /* USER CODE END PFP */
 
@@ -226,15 +241,14 @@ int main(void)
   MX_TIM3_Init();
   MX_TIM1_Init();
   MX_TIM5_Init();
+  MX_ADC1_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
   HAL_TIM_Base_Start(&htim1);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
 
-  HAL_TIM_Base_Start(&htim1);
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
-
-  HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_1 | TIM_CHANNEL_2);
+  HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_1 | TIM_CHANNEL_2);
 
 
   /* USER CODE END 2 */
@@ -252,11 +266,12 @@ int main(void)
 	  {
 		  timestamp = currentTime + 100;
 		  dt = 0.0001;
+		  distance();
 		  Trajectory();
-//		  PositionControlPID();
-		  QEIEncoderPosition();
+////		  PositionControlPID();
+		  QEIReadRaw = __HAL_TIM_GET_COUNTER(&htim2);
 		  VelocityControlPID();
-		  Drivemotor();
+		  motor(voltage);
 
 	  }
 
@@ -295,9 +310,9 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLM = 16;
-  RCC_OscInitStruct.PLL.PLLN = 336;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV4;
+  RCC_OscInitStruct.PLL.PLLM = 8;
+  RCC_OscInitStruct.PLL.PLLN = 100;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 4;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -313,10 +328,62 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_3) != HAL_OK)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief ADC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC1_Init(void)
+{
+
+  /* USER CODE BEGIN ADC1_Init 0 */
+
+  /* USER CODE END ADC1_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC1_Init 1 */
+
+  /* USER CODE END ADC1_Init 1 */
+
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+  */
+  hadc1.Instance = ADC1;
+  hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
+  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc1.Init.ScanConvMode = DISABLE;
+  hadc1.Init.ContinuousConvMode = DISABLE;
+  hadc1.Init.DiscontinuousConvMode = DISABLE;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc1.Init.NbrOfConversion = 1;
+  hadc1.Init.DMAContinuousRequests = DISABLE;
+  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  if (HAL_ADC_Init(&hadc1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_10;
+  sConfig.Rank = 1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC1_Init 2 */
+
+  /* USER CODE END ADC1_Init 2 */
+
 }
 
 /**
@@ -331,6 +398,7 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 0 */
 
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
   TIM_OC_InitTypeDef sConfigOC = {0};
   TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
@@ -339,12 +407,21 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 83;
+  htim1.Init.Prescaler = 125-1;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim1.Init.Period = 999;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
   if (HAL_TIM_PWM_Init(&htim1) != HAL_OK)
   {
     Error_Handler();
@@ -366,10 +443,6 @@ static void MX_TIM1_Init(void)
   {
     Error_Handler();
   }
-  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
-  {
-    Error_Handler();
-  }
   sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
   sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
   sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
@@ -385,6 +458,55 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 2 */
   HAL_TIM_MspPostInit(&htim1);
+
+}
+
+/**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_Encoder_InitTypeDef sConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 0;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 4294967295;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  sConfig.EncoderMode = TIM_ENCODERMODE_TI12;
+  sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
+  sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
+  sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
+  sConfig.IC1Filter = 0;
+  sConfig.IC2Polarity = TIM_ICPOLARITY_RISING;
+  sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
+  sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
+  sConfig.IC2Filter = 0;
+  if (HAL_TIM_Encoder_Init(&htim2, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
 
 }
 
@@ -531,7 +653,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, LD2_Pin|GPIO_PIN_11, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
@@ -539,12 +661,18 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : LD2_Pin */
-  GPIO_InitStruct.Pin = LD2_Pin;
+  /*Configure GPIO pins : PC2 PC3 */
+  GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_3;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : LD2_Pin PA11 */
+  GPIO_InitStruct.Pin = LD2_Pin|GPIO_PIN_11;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
 }
 
@@ -617,14 +745,14 @@ void PositionControlPID()
 
 void VelocityControlPID()
 {
-	error_velocity = velocity_setpoint + PID_position_total - velocity_now;
+	error_velocity = setpoint_now - QEIReadRaw;
 	//+ PID_position_total
 
 	// P-term-velocity
 	P_velocity_term = Kp_velocity * error_velocity;
 
 	// I-term-velocity
-	if(((distance_one_travel - 0.1) < velocity_now) && (velocity_now < (distance_one_travel + 0.1)))
+	if(((setpoint_now - 0.1) < QEIReadRaw) && (QEIReadRaw < (setpoint_now + 0.1)))
 	//(((velocity_end - 0.1) < velocity_now) && (velocity_now < (velocity_end + 0.1))&& ((time_trajectory - 0.01) < time_total) && (time_total < (time_trajectory + 0.01)))
 	{
 		integrate_velocity = 0;
@@ -639,19 +767,19 @@ void VelocityControlPID()
 	D_velocity_term = Kd_velocity * error_velocity / dt;
 
 	// PID-velocity
-	PID_velocity_total = P_velocity_term + I_velocity_term + D_velocity_term;
+	voltage = P_velocity_term + I_velocity_term + D_velocity_term;
 
 	// saturation duty cycle
-	if(PID_velocity_total > 1000)
-	{
-		PID_velocity_total = 1000;
-		integrate_velocity = 0;
-	}
-	else if(PID_velocity_total < -1000)
-	{
-		PID_velocity_total = -1000;
-		integrate_velocity += (error_velocity * dt);
-	}
+//	if(PID_velocity_total > 1000)
+//	{
+//		PID_velocity_total = 1000;
+//		integrate_velocity = 0;
+//	}
+//	else if(PID_velocity_total < -1000)
+//	{
+//		PID_velocity_total = -1000;
+//		integrate_velocity += (error_velocity * dt);
+//	}
 
 }
 
@@ -672,85 +800,114 @@ void Drivemotor()
 	}
 }
 
+void distance()
+{
+	if (setpoint_past != setpoint_now)
+	{
+		distance_one_travel = setpoint_now - setpoint_past;
+		setpoint_past = setpoint_now;
+	}
+	else
+	{
+		setpoint_past = setpoint_past;
+	}
+}
 
 void Trajectory()
 {
-	if (distance_one_travel >= 0) abs_distance_one_travel = distance_one_travel;
-	else if (distance_one_travel < 0) abs_distance_one_travel = distance_one_travel*(-1);
-	time_acc = ((velocity_max - 0)/acceleration_max);
-	time_const = ((1.0/velocity_max)*((abs_distance_one_travel)-((velocity_max*velocity_max)/acceleration_max)));
-	time_dec = ((0 - velocity_max)/((-1)*acceleration_max));
-	time_total = time_acc + time_const + time_dec;
-
-	// acceleration segment
-	if ((0 <= time_trajectory) && (time_trajectory < time_acc))
+	if (distance_one_travel >= 0)
 	{
-		time_trajectory += 0.0001;
-		time_now = time_trajectory;
-		position_segment = (velocity_start * time_now) + (1/2 * acceleration_max * (time_now * time_now));
-		if(distance_one_travel >= 0)
-		{
-			position_now_acc = position_now_dec + position_segment;
-			position_setpoint = position_now_dec + position_segment;
-
-			//velocity_setpoint = (acceleration_max * time_now) + velocity_start;
-		}
-		else if (distance_one_travel <= 0)
-		{
-			position_now_acc = position_now_dec - position_segment;
-			position_setpoint = position_now_dec - position_segment;
-
-			//velocity_setpoint = ((-1)*acceleration_max * time_now) - velocity_start;
-		}
+		sign_of_distance = 1;
+		abs_distance_one_travel = distance_one_travel;
+	}
+	else if (distance_one_travel < 0)
+	{
+		sign_of_distance = -1;
+		abs_distance_one_travel = distance_one_travel*(-1);
 	}
 
-	// constant segment
-	else if ((time_acc <= time_trajectory) && (time_trajectory < (time_acc + time_const)))
+	if (abs_distance_one_travel > ((velocity_max * velocity_max)/acceleration_max))
 	{
-		time_trajectory += 0.0001;
-		time_now = time_trajectory - time_acc;
-		position_segment = (velocity_max * time_now);
-		if(distance_one_travel >= 0)
-		{
-            position_now_const = position_now_acc + position_segment;
-            position_setpoint = position_now_acc + position_segment;
+		time_acc = ((velocity_max - 0)/acceleration_max);
+		time_const = ((1.0/velocity_max)*((abs_distance_one_travel)-((velocity_max*velocity_max)/acceleration_max)));
+		time_dec = ((0 - velocity_max)/((-1)*acceleration_max));
+		time_total = time_acc + time_const + time_dec;
 
-            //velocity_setpoint = velocity_max;
+		if ((0 <= time_trajectory) && (time_trajectory < time_acc))
+		{
+			time_trajectory += 0.0001;
+			time_now = time_trajectory;
+			position_segment = (velocity_start * time_now) + (1/2 * acceleration_max * (time_now * time_now));
+
+			position_now_acc = position_now_dec + (position_segment*sign_of_distance);
+			position_setpoint = position_now_dec + (position_segment*sign_of_distance);
+
+			//velocity_setpoint = (acceleration_max * sign_of_distance * time_now) + velocity_start;
 		}
-		else if (distance_one_travel <= 0)
-		{
-            position_now_const = position_now_acc - position_segment;
-            position_setpoint = position_now_acc - position_segment;
 
-            //velocity_setpoint = (-1) * velocity_max;
+		// constant segment
+		else if ((time_acc <= time_trajectory) && (time_trajectory < (time_acc + time_const)))
+		{
+			time_trajectory += 0.0001;
+			time_now = time_trajectory - time_acc;
+			position_segment = (velocity_max * time_now);
+
+			position_now_const = position_now_acc + (position_segment*sign_of_distance);
+			position_setpoint = position_now_acc + (position_segment*sign_of_distance);
+
+			//velocity_setpoint = sign_of_distance*velocity_max;
 		}
-	}
 
-	// deceleration segment
-	else if (((time_acc + time_const) <= time_trajectory) && (time_trajectory<= time_total))
-	{
-		time_trajectory += 0.0001;
-		time_now = time_trajectory - (time_acc + time_const);
-		position_segment = (velocity_max * time_now) + (1/2 * (-1)*acceleration_max * (time_now * time_now));
-		if(distance_one_travel >= 0)
+		// deceleration segment
+		else if (((time_acc + time_const) <= time_trajectory) && (time_trajectory<= time_total))
 		{
-			position_now_dec = position_now_const + position_segment;
-			position_setpoint = position_now_const + position_segment;
+			time_trajectory += 0.0001;
+			time_now = time_trajectory - (time_acc + time_const);
+			position_segment = (velocity_max * time_now) + (1/2 * (-1)*acceleration_max * (time_now * time_now));
 
-			//velocity_setpoint = ((-1)*acceleration_max * time_now) + velocity_max;
-		}
-		else if (distance_one_travel <= 0)
-		{
-			position_now_dec = position_now_const - position_segment;
-			position_setpoint = position_now_const - position_segment;
+			position_now_dec = position_now_const + (position_segment*sign_of_distance);
+			position_setpoint = position_now_const + (position_segment*sign_of_distance);
 
-			//velocity_setpoint = (acceleration_max * time_now) - velocity_max;
+			//velocity_setpoint = ((-1)*acceleration_max * time_now *sign_of_distance) + (velocity_max*sign_of_distance);
+
 		}
 	}
 
 
+	else
+	{
+		time_acc = sqrt(abs_distance_one_travel/(acceleration_max));
+		time_total = 2 * time_acc;
+		velocity_triangle = time_acc*acceleration_max;
 
-	if ((distance_one_travel-0.2< position_now) && ( position_now<distance_one_travel+0.2))
+		if ((0 <= time_trajectory) && (time_trajectory < time_acc))
+		{
+			time_trajectory += 0.0001;
+			time_now = time_trajectory;
+			position_segment = (velocity_start * time_now) + (1/2 * acceleration_max * (time_now * time_now));
+
+			position_now_acc = position_now_dec + (position_segment * sign_of_distance);
+			position_setpoint = position_now_dec + (position_segment * sign_of_distance);
+
+			//velocity_setpoint = (acceleration_max * sign_of_distance * time_now) + velocity_start;
+		}
+
+		else if ((time_acc <= time_trajectory) && (time_trajectory < time_total))
+		{
+			time_trajectory += 0.0001;
+			time_now = time_trajectory - (time_acc);
+			position_segment = (velocity_triangle * time_now) + (1/2 * (-1)*acceleration_max * (time_now * time_now));
+
+			position_now_dec = position_now_const + (position_segment*sign_of_distance);
+			position_setpoint = position_now_const + (position_segment*sign_of_distance);
+
+			//velocity_setpoint = ((-1)*acceleration_max * time_now * sign_of_distance) + (velocity_max*sign_of_distance);
+
+		}
+
+	}
+
+	if ((setpoint_now-0.5< velocity_setpoint) && (velocity_setpoint < setpoint_now+0.5))
 	{
 		time_trajectory = 0;
 	}
@@ -760,6 +917,27 @@ void Trajectory()
 
 
 
+void motor(float voltage) {
+	if (voltage > 0) {
+		// forward
+		if (voltage > 12.0) {
+			voltage = 12.0;
+		}
+		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, RESET);
+	} else if (voltage < 0) {
+		// backward
+		voltage *= -1.0;
+		if (voltage > 12.0) {
+			voltage = 12.0;
+		}
+		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, SET);
+	} else {
+		// stop
+		voltage = 0;
+	}
+
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, voltage * 1000.0 / 12.0);
+}
 
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
