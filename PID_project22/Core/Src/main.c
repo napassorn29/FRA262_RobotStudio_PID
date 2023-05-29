@@ -71,7 +71,12 @@ float Ki_position = 0;
 float Kd_position = 0;
 
 // error of position
-float error_position = 0;
+typedef struct PositionPID
+{
+	float error[3];
+
+}PositionPIDStructure;
+PositionPIDStructure Position = {0};
 
 // position
 float position_now = 0;
@@ -89,13 +94,25 @@ float P_velocity_term = 0;
 float I_velocity_term = 0;
 float D_velocity_term = 0;
 
+float first_error_velocity = 0;
+float second_error_velocity = 0;
+float third_error_velocity = 0;
+
+
 // constant
 float Kp_velocity = 0.0063;
 float Ki_velocity = 0;
 float Kd_velocity = 0;
 
 // error of velocity
-float error_velocity = 0;
+typedef struct VelocityPID
+{
+	float error[3];
+	float voltage[2];
+
+}VelocityPIDstructure;
+VelocityPIDstructure Velocity = {0};
+
 
 //integrate velocity
 float integrate_velocity = 0;
@@ -116,18 +133,24 @@ float position_now_acc = 0;
 float position_now_const = 0;
 float position_now_dec = 0;
 float position_segment = 0;
+float distance = 0;
 float distance_one_travel = 0;
 float abs_distance_one_travel = 0;
+float abs_distance = 0;
+float initial_position = 0;
+float position = 0;
 
 // velocity
 float rpm = 0;
-float velocity_max = 17000;
+float velocity_max = 1700;
 float velocity_start = 0;
 float velocity_end = 0;
 float velocity_triangle = 0;
+float velocity = 0;
 
 // acceleration
-float acceleration_max = 9000;
+float acceleration_max = 900;
+float acceleration = 0;
 
 // time
 float time_acc = 0;
@@ -136,7 +159,7 @@ float time_dec = 0;
 float time_total = 0;
 float time_now = 0;
 float time_trajectory = 0;
-int sign_of_distance = 0;
+int sign = 0;
 
 float setpoint_past = 0;
 float setpoint_now = 0;
@@ -191,7 +214,7 @@ static void MX_TIM2_Init(void);
 inline uint64_t micros();
 void Trajectory();
 void motor(float voltage);
-void distance();
+void Distance();
 void VelocityControlPID();
 
 /* USER CODE END PFP */
@@ -256,32 +279,32 @@ int main(void) {
 		if (HAL_GetTick() > timestamp) {
 			timestamp = currentTime + 100;
 			dt = 0.0001;
-			distance();
+			Distance();
 			Trajectory();
 			//velocity_check = (QEIReadRaw_now - QEIReadRaw_past)/dt;
 ////		  PositionControlPID();
-			QEIReadRaw_now = __HAL_TIM_GET_COUNTER(&htim2);
-			VelocityControlPID();
-			velocity_check = (QEIReadRaw_now - QEIReadRaw_past)/dt;
-			velocity_check_filter = (C * velocity_check) + ((1-C)*velocity_check_filter);
-			motor(voltage);
-			QEIReadRaw_past = QEIReadRaw_now;
+//			QEIReadRaw_now = __HAL_TIM_GET_COUNTER(&htim2);
+//			VelocityControlPID();
+//			velocity_check = (QEIReadRaw_now - QEIReadRaw_past)/dt;
+//			velocity_check_filter = (C * velocity_check) + ((1-C)*velocity_check_filter);
+//			motor(voltage);
+//			QEIReadRaw_past = QEIReadRaw_now;
 
 		}
 
 		// auto run
-		static uint32_t timestamp2 = 0;
-		if (HAL_GetTick() > timestamp2) {
-			timestamp2 = HAL_GetTick() + 1400;
-			if(!setpoint_now)
-			{
-				setpoint_now = 20000;
-			}
-			else
-			{
-				setpoint_now = 0;
-			}
-		}
+//		static uint32_t timestamp2 = 0;
+//		if (HAL_GetTick() > timestamp2) {
+//			timestamp2 = HAL_GetTick() + 1400;
+//			if(!setpoint_now)
+//			{
+//				setpoint_now = 20000;
+//			}
+//			else
+//			{
+//				setpoint_now = 0;
+//			}
+//		}
 
 //	  static uint32_t timestamp = 0;
 //	  if(HAL_GetTick() > timestamp)
@@ -666,211 +689,319 @@ static void MX_GPIO_Init(void) {
 
 /* USER CODE BEGIN 4 */
 
-void QEIEncoderPosition() {
-	QEIReadPosition = __HAL_TIM_GET_COUNTER(&htim3);
-	BITtoDegree = (QEIReadPosition * 360.0) / 3072.0;
+//void QEIEncoderPosition() {
+//	QEIReadPosition = __HAL_TIM_GET_COUNTER(&htim3);
+//	BITtoDegree = (QEIReadPosition * 360.0) / 3072.0;
+//
+//	//collect data
+//	QEIData.data[0] = BITtoDegree;
+//
+//	//calculation
+//	float diffposition = QEIData.data[0] - QEIData.data[1];
+//
+//	//handle wrap-around
+//	if (diffposition > 180) {
+//		diffposition = diffposition - 360.0;
+//		velocity_now = velocity_now + diffposition;
+//	} else if (diffposition < -180) {
+//		diffposition = diffposition + 360.0;
+//		velocity_now = velocity_now + diffposition;
+//	} else {
+//		velocity_now = velocity_now + diffposition;
+//	}
+//
+//	//velocity_check = ((QEIData.data[0]-QEIData.data[1]) * 1000000)/100;
+//	//velocity_now = (C * velocity_check) + ((1-C)*velocity_now);
+//	//velocity_now = position_now;
+//	QEIData.data[1] = QEIData.data[0];
+//
+//}
 
-	//collect data
-	QEIData.data[0] = BITtoDegree;
+//void PositionControlPID() {
+//	error_position = position_setpoint - position_now;
+//
+//	// P-term-position
+//	P_position_term = Kp_position * error_position;
+//
+//	// I-term-position
+//	if (((distance_one_travel - 0.1) < position_now)
+//			&& (position_now < (distance_one_travel + 0.1))) {
+//		integrate_position = 0;
+//	} else {
+//		integrate_position += (error_position * dt);
+//	}
+//	I_position_term = Ki_position * integrate_position;
+//
+//	// D-term-position
+//	D_position_term = Kd_position * (error_position / dt);
+//
+//	// PID-position
+//	PID_position_total = P_position_term + I_position_term + D_position_term;
+//}
 
-	//calculation
-	float diffposition = QEIData.data[0] - QEIData.data[1];
 
-	//handle wrap-around
-	if (diffposition > 180) {
-		diffposition = diffposition - 360.0;
-		velocity_now = velocity_now + diffposition;
-	} else if (diffposition < -180) {
-		diffposition = diffposition + 360.0;
-		velocity_now = velocity_now + diffposition;
-	} else {
-		velocity_now = velocity_now + diffposition;
-	}
+// PID windup
+void VelocityControlPID()
+{
+	Velocity.error[0] = velocity_setpoint - QEIReadRaw_now;
 
-	//velocity_check = ((QEIData.data[0]-QEIData.data[1]) * 1000000)/100;
-	//velocity_now = (C * velocity_check) + ((1-C)*velocity_now);
-	//velocity_now = position_now;
-	QEIData.data[1] = QEIData.data[0];
+	// last term of volt
+
+	// first error
+	first_error_velocity = (Kp_velocity + Ki_velocity + Kd_velocity) * Velocity.error[0];
+
+	// second error
+	second_error_velocity = (Kp_velocity + (2 * Kd_velocity)) * Velocity.error[1];
+
+	// third error
+	third_error_velocity = (Kd_velocity) * Velocity.error[2];
+
+	// voltage
+	Velocity.voltage[0] = (Velocity.voltage[1] + first_error_velocity + second_error_velocity + third_error_velocity);
+
+	// set present to past
+	Velocity.voltage[1] = Velocity.voltage[0];
+	Velocity.error[2] = Velocity.error[1];
+	Velocity.error[1] = Velocity.error[0];
 
 }
 
-void PositionControlPID() {
-	error_position = position_setpoint - position_now;
 
-	// P-term-position
-	P_position_term = Kp_position * error_position;
 
-	// I-term-position
-	if (((distance_one_travel - 0.1) < position_now)
-			&& (position_now < (distance_one_travel + 0.1))) {
-		integrate_position = 0;
-	} else {
-		integrate_position += (error_position * dt);
-	}
-	I_position_term = Ki_position * integrate_position;
 
-	// D-term-position
-	D_position_term = Kd_position * (error_position / dt);
 
-	// PID-position
-	PID_position_total = P_position_term + I_position_term + D_position_term;
-}
+//	// PID_position_total
+//
+//	// P-term-velocity
+//	P_velocity_term = Kp_velocity * error_velocity;
+//
+//	// I-term-velocity
+//	if (((setpoint_now - 0.1) < QEIReadRaw_now)
+//			&& (QEIReadRaw_now < (setpoint_now + 0.1)))
+//			//(((velocity_end - 0.1) < velocity_now) && (velocity_now < (velocity_end + 0.1))&& ((time_trajectory - 0.01) < time_total) && (time_total < (time_trajectory + 0.01)))
+//			{
+//		integrate_velocity = 0;
+//	} else {
+//		integrate_velocity += (error_velocity * dt);
+//	}
+//	I_velocity_term = Ki_velocity * integrate_velocity;
+//
+//	// D-term-velocity
+//	D_velocity_term = Kd_velocity * error_velocity / dt;
+//
+//	// PID-velocity
+//	voltage = P_velocity_term + I_velocity_term + D_velocity_term;
 
-void VelocityControlPID() {
-	error_velocity = velocity_setpoint - QEIReadRaw_now;
-	//+ PID_position_total
 
-	// P-term-velocity
-	P_velocity_term = Kp_velocity * error_velocity;
-
-	// I-term-velocity
-	if (((setpoint_now - 0.1) < QEIReadRaw_now)
-			&& (QEIReadRaw_now < (setpoint_now + 0.1)))
-			//(((velocity_end - 0.1) < velocity_now) && (velocity_now < (velocity_end + 0.1))&& ((time_trajectory - 0.01) < time_total) && (time_total < (time_trajectory + 0.01)))
-			{
-		integrate_velocity = 0;
-	} else {
-		integrate_velocity += (error_velocity * dt);
-	}
-	I_velocity_term = Ki_velocity * integrate_velocity;
-
-	// D-term-velocity
-	D_velocity_term = Kd_velocity * error_velocity / dt;
-
-	// PID-velocity
-	voltage = P_velocity_term + I_velocity_term + D_velocity_term;
-}
-
-void distance()
+void Distance()
 {
 	if (setpoint_past != setpoint_now)
 	{
-		distance_one_travel = setpoint_now - setpoint_past;
+		distance = setpoint_now - setpoint_past;
 		setpoint_past = setpoint_now;
-		if (distance_one_travel >= 0)
+		if (distance >= 0)
 		{
-			sign_of_distance = 1;
-			abs_distance_one_travel = distance_one_travel;
+			sign = 1;
+			abs_distance = distance;
 		}
-		else if (distance_one_travel < 0)
+		else if (distance < 0)
 		{
-			sign_of_distance = -1;
-			abs_distance_one_travel = distance_one_travel * (-1);
+			sign = -1;
+			abs_distance = distance * (-1);
 		}
 	}
 	else
 	{
-		setpoint_past = setpoint_past;
+		setpoint_past = setpoint_now;
 	}
 }
+
+//void Distance()
+//{
+//	if (setpoint_past != setpoint_now)
+//	{
+//		distance_one_travel = setpoint_now - setpoint_past;
+//		setpoint_past = setpoint_now;
+//		if (distance_one_travel >= 0)
+//		{
+//			sign = 1;
+//			abs_distance_one_travel = distance_one_travel;
+//		}
+//		else if (distance_one_travel < 0)
+//		{
+//			sign = -1;
+//			abs_distance_one_travel = distance_one_travel * (-1);
+//		}
+//	}
+//	else
+//	{
+//		setpoint_past = setpoint_now;
+//	}
+//}
 
 void Trajectory()
 {
-	if (abs_distance_one_travel > ((velocity_max * velocity_max) / acceleration_max))
+	// Define pattern of trapezoidal_trajectory
+	if (abs_distance > ((velocity_max * velocity_max)/acceleration_max))
 	{
-			time_acc = ((velocity_max - 0) / acceleration_max);
-			time_const = ((1.0 / velocity_max)
-					* ((abs_distance_one_travel)
-							- ((velocity_max * velocity_max) / acceleration_max)));
-			time_dec = ((0 - velocity_max) / ((-1) * acceleration_max));
-			time_total = time_acc + time_const + time_dec;
+	    time_acc = ((velocity_max - 0)/acceleration_max);
+	    time_const = ((1.0 / velocity_max)* ((abs_distance)- ((velocity_max * velocity_max) / acceleration_max)));
+	    time_dec = ((0 - velocity_max) / ((-1) * acceleration_max));
+		time_total = (2 * time_acc) + (abs_distance -(velocity_max * (velocity_max))/acceleration_max) / velocity_max;
 	}
+
 	else
 	{
-		time_acc = sqrt(abs_distance_one_travel / (acceleration_max));
-		time_total = 2 * time_acc;
-		velocity_triangle = time_acc * acceleration_max;
+		time_acc = sqrt(abs_distance/acceleration_max);
+		time_total = time_acc * 2;
 	}
 
-	if (abs_distance_one_travel > ((velocity_max * velocity_max) / acceleration_max))
+	//acceleration segment
+	if ((0 <= time_trajectory) && (time_trajectory < time_acc))
 	{
-		if ((0 <= time_trajectory) && (time_trajectory < time_acc)) {
-			time_trajectory += 0.0001;
-			time_now = time_trajectory;
-			position_segment = (velocity_start * time_now)
-					+ (1 / 2 * acceleration_max * (time_now * time_now));
-
-			position_now_acc = position_now_dec
-					+ (position_segment * sign_of_distance);
-			position_setpoint = position_now_dec
-					+ (position_segment * sign_of_distance);
-
-			//velocity_setpoint = (acceleration_max * sign_of_distance * time_now) + velocity_start;
-		}
-
-		// constant segment
-		else if ((time_acc <= time_trajectory)
-				&& (time_trajectory < (time_acc + time_const))) {
-			time_trajectory += 0.0001;
-			time_now = time_trajectory - time_acc;
-			position_segment = (velocity_max * time_now);
-
-			position_now_const = position_now_acc
-					+ (position_segment * sign_of_distance);
-			position_setpoint = position_now_acc
-					+ (position_segment * sign_of_distance);
-
-			//velocity_setpoint = sign_of_distance*velocity_max;
-		}
-
-		// deceleration segment
-		else if (((time_acc + time_const) <= time_trajectory)
-				&& (time_trajectory <= time_total)) {
-			time_trajectory += 0.0001;
-			time_now = time_trajectory - (time_acc + time_const);
-			position_segment = (velocity_max * time_now)
-					+ (1 / 2 * (-1) * acceleration_max * (time_now * time_now));
-
-			position_now_dec = position_now_const
-					+ (position_segment * sign_of_distance);
-			position_setpoint = position_now_const
-					+ (position_segment * sign_of_distance);
-
-			//velocity_setpoint = ((-1)*acceleration_max * time_now *sign_of_distance) + (velocity_max*sign_of_distance);
-
-		}
+		time_trajectory += 0.0001;
+	    position = initial_position + (0.5 * acceleration_max * (time_trajectory*time_trajectory)*sign);
+	    velocity = (acceleration_max * time_trajectory *sign);
+	    acceleration = acceleration_max * sign;
 	}
 
-	else {
-		if ((0 <= time_trajectory) && (time_trajectory < time_acc)) {
-			time_trajectory += 0.0001;
-			time_now = time_trajectory;
-			position_segment = (velocity_start * time_now)
-					+ (1 / 2 * acceleration_max * (time_now * time_now));
 
-			position_now_acc = position_now_dec
-					+ (position_segment * sign_of_distance);
-			position_setpoint = position_now_dec
-					+ (position_segment * sign_of_distance);
-
-			//velocity_setpoint = (acceleration_max * sign_of_distance * time_now) + velocity_start;
-		}
-
-		else if ((time_acc <= time_trajectory)
-				&& (time_trajectory < time_total)) {
-			time_trajectory += 0.0001;
-			time_now = time_trajectory - (time_acc);
-			position_segment = (velocity_triangle * time_now)
-					+ (1 / 2 * (-1) * acceleration_max * (time_now * time_now));
-
-			position_now_dec = position_now_acc
-					+ (position_segment * sign_of_distance);
-			position_setpoint = position_now_acc
-					+ (position_segment * sign_of_distance);
-
-			//velocity_setpoint = ((-1)*acceleration_max * time_now * sign_of_distance) + (velocity_max*sign_of_distance);
-
-		}
-
+	//constant segment
+	else if (((time_acc <= time_trajectory) && (time_trajectory) < (time_total - time_acc)))
+	{
+		time_trajectory += 0.0001;
+	    position = initial_position + (1/2 * acceleration_max * (time_acc * time_acc)* sign) + (velocity_max * (time_trajectory - time_acc)* sign);
+	    velocity = (velocity_max *sign);
+	    acceleration = 0;
 	}
 
-	if ((setpoint_now - 0.5 < velocity_setpoint)
-			&& (velocity_setpoint < setpoint_now + 0.5)) {
+	//deceleration segment
+	else if (((time_total-time_acc) <= time_trajectory) && (time_trajectory <= time_total))
+	{
+		time_trajectory += 0.0001;
+	    position = initial_position + (1/2 * acceleration_max * (time_acc * time_acc) * sign) + (velocity_max * (time_total - (2 * time_acc))* sign) - (1/2 * acceleration_max * (time_trajectory - (time_total - time_acc))* (time_trajectory - (time_total - time_acc)) * sign) + (velocity_max * (time_trajectory - (time_total - time_acc))* sign);
+	    velocity = (- acceleration_max * sign * (time_trajectory - (time_total - time_acc))) + (velocity_max * sign) ;
+	    acceleration = -acceleration_max * sign;
+	}
+
+	if ((setpoint_now - 0.09 < position) && (position < setpoint_now + 0.09))
+	{
 		time_trajectory = 0;
+		initial_position = position;
 	}
 
-	velocity_setpoint = position_setpoint;
+	velocity_setpoint = position;
 }
+
+
+//void Trajectory()
+//{
+//	if (abs_distance_one_travel > ((velocity_max * velocity_max) / acceleration_max))
+//	{
+//			time_acc = ((velocity_max - 0) / acceleration_max);
+//			time_const = ((1.0 / velocity_max)
+//					* ((abs_distance_one_travel)
+//							- ((velocity_max * velocity_max) / acceleration_max)));
+//			time_dec = ((0 - velocity_max) / ((-1) * acceleration_max));
+//			time_total = time_acc + time_const + time_dec;
+//	}
+//	else
+//	{
+//		time_acc = sqrt(abs_distance_one_travel / (acceleration_max));
+//		time_total = 2 * time_acc;
+//		velocity_triangle = time_acc * acceleration_max;
+//	}
+//
+//	if (abs_distance_one_travel > ((velocity_max * velocity_max) / acceleration_max))
+//	{
+//		if ((0 <= time_trajectory) && (time_trajectory < time_acc)) {
+//			time_trajectory += 0.0001;
+//			time_now = time_trajectory;
+//			position_segment = (velocity_start * time_now)
+//					+ (1 / 2 * acceleration_max * (time_now * time_now));
+//
+//			position_now_acc = position_now_dec
+//					+ (position_segment * sign);
+//			position_setpoint = position_now_dec
+//					+ (position_segment * sign);
+//
+//			//velocity_setpoint = (acceleration_max * sign_of_distance * time_now) + velocity_start;
+//		}
+//
+//		// constant segment
+//		else if ((time_acc <= time_trajectory)
+//				&& (time_trajectory < (time_acc + time_const))) {
+//			time_trajectory += 0.0001;
+//			time_now = time_trajectory - time_acc;
+//			position_segment = (velocity_max * time_now);
+//
+//			position_now_const = position_now_acc
+//					+ (position_segment * sign);
+//			position_setpoint = position_now_acc
+//					+ (position_segment * sign);
+//
+//			//velocity_setpoint = sign_of_distance*velocity_max;
+//		}
+//
+//		// deceleration segment
+//		else if (((time_acc + time_const) <= time_trajectory)
+//				&& (time_trajectory <= time_total)) {
+//			time_trajectory += 0.0001;
+//			time_now = time_trajectory - (time_acc + time_const);
+//			position_segment = (velocity_max * time_now)
+//					+ (1 / 2 * (-1) * acceleration_max * (time_now * time_now));
+//
+//			position_now_dec = position_now_const
+//					+ (position_segment * sign);
+//			position_setpoint = position_now_const
+//					+ (position_segment * sign);
+//
+//			//velocity_setpoint = ((-1)*acceleration_max * time_now *sign_of_distance) + (velocity_max*sign_of_distance);
+//
+//		}
+//	}
+//
+//	else {
+//		if ((0 <= time_trajectory) && (time_trajectory < time_acc)) {
+//			time_trajectory += 0.0001;
+//			time_now = time_trajectory;
+//			position_segment = (velocity_start * time_now)
+//					+ (1 / 2 * acceleration_max * (time_now * time_now));
+//
+//			position_now_acc = position_now_dec
+//					+ (position_segment * sign);
+//			position_setpoint = position_now_dec
+//					+ (position_segment * sign);
+//
+//			//velocity_setpoint = (acceleration_max * sign_of_distance * time_now) + velocity_start;
+//		}
+//
+//		else if ((time_acc <= time_trajectory)
+//				&& (time_trajectory < time_total)) {
+//			time_trajectory += 0.0001;
+//			time_now = time_trajectory - (time_acc);
+//			position_segment = (velocity_triangle * time_now)
+//					+ (1 / 2 * (-1) * acceleration_max * (time_now * time_now));
+//
+//
+//			position_now_dec = position_now_acc
+//					+ (position_segment * sign);
+//			position_setpoint = position_now_acc
+//					+ (position_segment * sign);
+//
+//			//velocity_setpoint = ((-1)*acceleration_max * time_now * sign_of_distance) + (velocity_max*sign_of_distance);
+//
+//		}
+//
+//	}
+//
+//	if ((setpoint_now - 0.5 < velocity_setpoint)
+//			&& (velocity_setpoint < setpoint_now + 0.5)) {
+//		time_trajectory = 0;
+//	}
+//
+//	velocity_setpoint = position_setpoint;
+//}
 
 void motor(float voltage) {
 	if (voltage > 0) {
