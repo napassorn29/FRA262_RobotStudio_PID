@@ -1615,17 +1615,17 @@ static void MX_TIM1_Init(void)
  800110e:	4b3e      	ldr	r3, [pc, #248]	; (8001208 <MX_TIM1_Init+0x138>)
  8001110:	4a3e      	ldr	r2, [pc, #248]	; (800120c <MX_TIM1_Init+0x13c>)
  8001112:	601a      	str	r2, [r3, #0]
-  htim1.Init.Prescaler = 25-1;
+  htim1.Init.Prescaler = 5-1;
  8001114:	4b3c      	ldr	r3, [pc, #240]	; (8001208 <MX_TIM1_Init+0x138>)
- 8001116:	2218      	movs	r2, #24
+ 8001116:	2204      	movs	r2, #4
  8001118:	605a      	str	r2, [r3, #4]
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
  800111a:	4b3b      	ldr	r3, [pc, #236]	; (8001208 <MX_TIM1_Init+0x138>)
  800111c:	2200      	movs	r2, #0
  800111e:	609a      	str	r2, [r3, #8]
-  htim1.Init.Period = 4999;
+  htim1.Init.Period = 24999;
  8001120:	4b39      	ldr	r3, [pc, #228]	; (8001208 <MX_TIM1_Init+0x138>)
- 8001122:	f241 3287 	movw	r2, #4999	; 0x1387
+ 8001122:	f246 12a7 	movw	r2, #24999	; 0x61a7
  8001126:	60da      	str	r2, [r3, #12]
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
  8001128:	4b37      	ldr	r3, [pc, #220]	; (8001208 <MX_TIM1_Init+0x138>)
@@ -3233,7 +3233,7 @@ void motor(float voltage) {
 //		voltage = 0;
 //	}
 
-	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, voltage * 5000.0 / 12.0);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, voltage * 25000.0 / 12.0);
  8001ddc:	6878      	ldr	r0, [r7, #4]
  8001dde:	f7fe fb5f 	bl	80004a0 <__aeabi_f2d>
  8001de2:	a30f      	add	r3, pc, #60	; (adr r3, 8001e20 <motor+0xd0>)
@@ -3263,7 +3263,7 @@ void motor(float voltage) {
  8001e1a:	bf00      	nop
  8001e1c:	f3af 8000 	nop.w
  8001e20:	00000000 	.word	0x00000000
- 8001e24:	40b38800 	.word	0x40b38800
+ 8001e24:	40d86a00 	.word	0x40d86a00
  8001e28:	41400000 	.word	0x41400000
  8001e2c:	40020000 	.word	0x40020000
  8001e30:	40280000 	.word	0x40280000

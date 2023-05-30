@@ -102,7 +102,7 @@ float third_error_velocity = 0;
 // constant
 float Kp_velocity = 0.13;
 //float Ki_velocity = 0;
-float Ki_velocity = 0.0000001;
+float Ki_velocity = 0.00000001;
 float Kd_velocity = 0;
 
 // error of velocity
@@ -445,9 +445,9 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 25-1;
+  htim1.Init.Prescaler = 5-1;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 4999;
+  htim1.Init.Period = 24999;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -1039,7 +1039,7 @@ void motor(float voltage) {
 //		voltage = 0;
 //	}
 
-	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, voltage * 5000.0 / 12.0);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, voltage * 25000.0 / 12.0);
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
