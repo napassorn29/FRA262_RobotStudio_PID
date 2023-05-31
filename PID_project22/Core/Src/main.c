@@ -58,6 +58,8 @@ float position_milli = 0;
 // time
 float dt = 0;
 uint64_t _micros = 0;
+uint64_t time = 0;
+uint8_t time_flag = 0;
 
 //position
 // PID position term
@@ -74,9 +76,13 @@ float Kd_position = 0;
 typedef struct PositionPID
 {
 	float error[3];
+	float voltage[2];
 
 }PositionPIDStructure;
 PositionPIDStructure Position = {0};
+float first_error_position = 0;
+float second_error_position = 0;
+float third_error_position = 0;
 
 // position
 float position_now = 0;
@@ -100,9 +106,9 @@ float third_error_velocity = 0;
 
 
 // constant
-float Kp_velocity = 0.13;
+float Kp_velocity = 175;
 //float Ki_velocity = 0;
-float Ki_velocity = 0.00000001;
+float Ki_velocity = 0.02;
 float Kd_velocity = 0;
 
 // error of velocity
@@ -145,7 +151,7 @@ float position = 0;
 
 // velocity
 float rpm = 0;
-float velocity_max = 18000;
+float velocity_max = 20000;
 float max_velocity = 0;
 float velocity_start = 0;
 float velocity_end = 0;
@@ -222,6 +228,7 @@ void Trajectory();
 void motor(float voltage);
 void Distance();
 void VelocityControlPID();
+void PositionControlPID();
 
 /* USER CODE END PFP */
 
@@ -273,6 +280,8 @@ int main(void)
 
 	HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_1 | TIM_CHANNEL_2);
 
+	HAL_TIM_Base_Start_IT(&htim5);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -281,16 +290,17 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-		static uint32_t timestamp = 0;
-		int64_t currentTime = micros();
-		if (HAL_GetTick() > timestamp) {
-			timestamp = currentTime + 100;
+		static uint64_t timestamp = 0;
+		time  = micros();
+		if (time > timestamp) {
+			timestamp += 100;
 			dt = 0.0001;
 			Distance();
 			Trajectory();
 //			velocity_check = (QEIReadRaw_now - QEIReadRaw_past)/dt;
 //		  PositionControlPID();
 			QEIReadRaw_now = __HAL_TIM_GET_COUNTER(&htim2);
+//			PositionControlPID();
 			VelocityControlPID();
 //			velocity_check = (QEIReadRaw_now - QEIReadRaw_past)/dt;
 //			velocity_check_filter = (C * velocity_check) + ((1-C)*velocity_check_filter);
@@ -716,33 +726,6 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-void QEIEncoderPosition() {
-	QEIReadPosition = __HAL_TIM_GET_COUNTER(&htim3);
-	BITtoDegree = (QEIReadPosition * 360.0) / 3072.0;
-
-	//collect data
-	QEIData.data[0] = BITtoDegree;
-
-	//calculation
-	float diffposition = QEIData.data[0] - QEIData.data[1];
-
-	//handle wrap-around
-	if (diffposition > 180) {
-		diffposition = diffposition - 360.0;
-		velocity_now = velocity_now + diffposition;
-	} else if (diffposition < -180) {
-		diffposition = diffposition + 360.0;
-		velocity_now = velocity_now + diffposition;
-	} else {
-		velocity_now = velocity_now + diffposition;
-	}
-
-	//velocity_check = ((QEIData.data[0]-QEIData.data[1]) * 1000000)/100;
-	//velocity_now = (C * velocity_check) + ((1-C)*velocity_now);
-	//velocity_now = position_now;
-	QEIData.data[1] = QEIData.data[0];
-
-}
 
 //void PositionControlPID() {
 //	error_position = position_setpoint - position_now;
@@ -767,7 +750,7 @@ void QEIEncoderPosition() {
 //}
 
 
- //PID windup
+	//PID windup
 void VelocityControlPID()
 {
 	Velocity.error[0] = velocity_setpoint - QEIReadRaw_now;
@@ -784,41 +767,39 @@ void VelocityControlPID()
 	third_error_velocity = (Kd_velocity) * Velocity.error[2];
 
 	// voltage
-	Velocity.voltage[0] = (Velocity.voltage[1] + first_error_velocity - second_error_velocity + third_error_velocity);
+	Velocity.voltage[0] += first_error_velocity - second_error_velocity + third_error_velocity;
 	voltage = Velocity.voltage[0];
 
 	// set present to past
-	Velocity.voltage[1] = Velocity.voltage[0];
 	Velocity.error[2] = Velocity.error[1];
 	Velocity.error[1] = Velocity.error[0];
 
 }
 
+	//PID windup
+void PositionControlPID()
+{
+	// error position
+	Position.error[0] = position - QEIReadRaw_now;
 
+	// first error
+	first_error_position = (Kp_position + Ki_position + Kd_position) * Position.error[0];
 
+	// second error
+	second_error_position = (Kp_position + (2 * Kd_position)) * Position.error[1];
 
+	// third error
+	third_error_position = (Kd_position) * Position.error[3];
 
-//	// PID_position_total
-//
-//	// P-term-velocity
-//	P_velocity_term = Kp_velocity * error_velocity;
-//
-//	// I-term-velocity
-//	if (((setpoint_now - 0.1) < QEIReadRaw_now)
-//			&& (QEIReadRaw_now < (setpoint_now + 0.1)))
-//			//(((velocity_end - 0.1) < velocity_now) && (velocity_now < (velocity_end + 0.1))&& ((time_trajectory - 0.01) < time_total) && (time_total < (time_trajectory + 0.01)))
-//			{
-//		integrate_velocity = 0;
-//	} else {
-//		integrate_velocity += (error_velocity * dt);
-//	}
-//	I_velocity_term = Ki_velocity * integrate_velocity;
-//
-//	// D-term-velocity
-//	D_velocity_term = Kd_velocity * error_velocity / dt;
-//
-//	// PID-velocity
-//	voltage = P_velocity_term + I_velocity_term + D_velocity_term;
+	// voltage
+	Position.voltage[0] += first_error_position - second_error_position + third_error_position;
+	voltage = Position.voltage[0];
+
+	// set present to past
+	Position.error[2] = Position.error[1];
+	Position.error[1] = Position.error[0];
+
+}
 
 
 void Distance()
@@ -853,7 +834,6 @@ void Trajectory()
 	{
 	    time_acc = ((velocity_max - 0)/acceleration_max);
 	    time_const = ((1.0 / velocity_max)* ((abs_distance)- ((velocity_max * velocity_max) / acceleration_max)));
-	    time_dec = ((0 - velocity_max) / ((-1) * acceleration_max));
 		time_total = (2 * time_acc) + (abs_distance -(velocity_max * velocity_max)/acceleration_max) / velocity_max;
 		max_velocity = velocity_max * sign;
 	}
@@ -893,7 +873,7 @@ void Trajectory()
 		time_trajectory += 0.0001;
 		time_err = (time_trajectory - (time_acc + time_const));
 		position = position_acc + position_const + (max_velocity * time_err) + (0.5 *(-1)* acceleration_max * (time_err * time_err) * sign);
-	    velocity = (- acceleration_max * sign * (time_trajectory - (time_total - time_acc))) + (max_velocity * sign) ;
+	    velocity = (- acceleration_max * sign * time_err) + (max_velocity) ; ;
 	    acceleration = - acceleration_max * sign;
 	    initial_position = position;
 	}
@@ -901,136 +881,25 @@ void Trajectory()
 	if ((setpoint_now - 0.09 < position) && (position < setpoint_now + 0.09))
 	{
 		time_trajectory = 0;
-		//initial_position = position;
 	}
 
 	velocity_setpoint = position;
 }
 
 
-//void Trajectory()
-//{
-//	if (abs_distance > ((velocity_max * velocity_max) / acceleration_max))
-//	{
-//			time_acc = ((velocity_max - 0) / acceleration_max);
-//			time_const = ((1.0 / velocity_max)
-//					* ((abs_distance)
-//							- ((velocity_max * velocity_max) / acceleration_max)));
-//			time_dec = ((0 - velocity_max) / ((-1) * acceleration_max));
-//			time_total = time_acc + time_const + time_dec;
-//	}
-//	else
-//	{
-//		time_acc = sqrt(abs_distance / (acceleration_max));
-//		time_total = 2 * time_acc;
-//		velocity_triangle = time_acc * acceleration_max;
-//	}
-//
-//	if (abs_distance > ((velocity_max * velocity_max) / acceleration_max))
-//	{
-//		if ((0 <= time_trajectory) && (time_trajectory < time_acc)) {
-//			time_trajectory += 0.0001;
-//			time_now = time_trajectory;
-//			position_segment = (velocity_start * time_now)
-//					+ (1 / 2 * acceleration_max * (time_now * time_now));
-//
-//			position_now_acc = position_now_dec
-//					+ (position_segment * sign);
-//			position = position_now_dec
-//					+ (position_segment * sign);
-//
-//			//velocity_setpoint = (acceleration_max * sign_of_distance * time_now) + velocity_start;
-//		}
-//
-//		// constant segment
-//		else if ((time_acc <= time_trajectory)
-//				&& (time_trajectory < (time_acc + time_const))) {
-//			time_trajectory += 0.0001;
-//			time_now = time_trajectory - time_acc;
-//			position_segment = (velocity_max * time_now);
-//
-//			position_now_const = position_now_acc
-//					+ (position_segment * sign);
-//			position = position_now_acc
-//					+ (position_segment * sign);
-//
-//			//velocity_setpoint = sign_of_distance*velocity_max;
-//		}
-//
-//		// deceleration segment
-//		else if (((time_acc + time_const) <= time_trajectory)
-//				&& (time_trajectory <= time_total)) {
-//			time_trajectory += 0.0001;
-//			time_now = time_trajectory - (time_acc + time_const);
-//			position_segment = (velocity_max * time_now)
-//					+ (1 / 2 * (-1) * acceleration_max * (time_now * time_now));
-//
-//			position_now_dec = position_now_const
-//					+ (position_segment * sign);
-//			position = position_now_const
-//					+ (position_segment * sign);
-//
-//			//velocity_setpoint = ((-1)*acceleration_max * time_now *sign_of_distance) + (velocity_max*sign_of_distance);
-//
-//		}
-//	}
-//
-//
-//	else
-//	{
-//		if ((0 <= time_trajectory) && (time_trajectory < time_acc)) {
-//			time_trajectory += 0.0001;
-//			time_now = time_trajectory;
-//			position_segment = (velocity_start * time_now)
-//					+ (1 / 2 * acceleration_max * (time_now * time_now));
-//
-//			position_now_acc = position_now_dec
-//					+ (position_segment * sign);
-//			position = position_now_dec
-//					+ (position_segment * sign);
-//
-//			//velocity_setpoint = (acceleration_max * sign_of_distance * time_now) + velocity_start;
-//		}
-//
-//		else if ((time_acc <= time_trajectory)
-//				&& (time_trajectory < time_total)) {
-//			time_trajectory += 0.0001;
-//			time_now = time_trajectory - (time_acc);
-//			position_segment = (velocity_triangle * time_now)
-//					+ (1 / 2 * (-1) * acceleration_max * (time_now * time_now));
-//
-//			position_now_dec = position_now_acc
-//					+ (position_segment * sign);
-//			position = position_now_acc
-//					+ (position_segment * sign);
-//
-//			//velocity_setpoint = ((-1)*acceleration_max * time_now * sign_of_distance) + (velocity_max*sign_of_distance);
-//
-//		}
-//
-//	}
-//
-//	if ((setpoint_now - 0.2 < velocity_setpoint)
-//			&& (velocity_setpoint < setpoint_now + 0.2)) {
-//		time_trajectory = 0;
-//		initial_position = position;
-//	}
-//
-//	velocity_setpoint = position;
-//}
 
 void motor(float voltage) {
 	if (voltage > 0) {
 		// forward
-		if (voltage > 12.0) {
-			voltage = 12.0;
+		if (voltage > 25000) {
+			voltage = 25000;
 		}
 		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, RESET);
 	} else if (voltage < 0) {
 		// backward
 		voltage *= -1.0;
-		if (voltage > 12.0) {
-			voltage = 12.0;
+		if (voltage > 25000) {
+			voltage = 25000;
 		}
 		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, SET);
 	}
@@ -1039,18 +908,24 @@ void motor(float voltage) {
 //		voltage = 0;
 //	}
 
-	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, voltage * 25000.0 / 12.0);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, voltage);
 }
+
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 	if (htim == &htim5) {
-		_micros += UINT32_MAX;
+		if (time_flag) _micros += UINT32_MAX;
+		time_flag = 1;
 	}
 }
 
 uint64_t micros() {
 	return __HAL_TIM_GET_COUNTER(&htim5) + _micros;
 }
+
+
+
+
 
 /* USER CODE END 4 */
 
