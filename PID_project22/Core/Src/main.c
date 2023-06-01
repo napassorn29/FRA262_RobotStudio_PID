@@ -48,6 +48,7 @@ TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim5;
+TIM_HandleTypeDef htim9;
 
 UART_HandleTypeDef huart2;
 
@@ -56,7 +57,7 @@ UART_HandleTypeDef huart2;
 float position_milli = 0;
 
 // time
-float dt = 0;
+float dt = 0.0001;
 uint64_t _micros = 0;
 uint64_t time = 0;
 uint8_t time_flag = 0;
@@ -106,10 +107,10 @@ float third_error_velocity = 0;
 
 
 // constant
-float Kp_velocity = 175;
+float Kp_velocity = 162;
 //float Ki_velocity = 0;
-float Ki_velocity = 0.02;
-float Kd_velocity = 0;
+float Ki_velocity = 0.035;
+float Kd_velocity = 500;
 
 // error of velocity
 typedef struct VelocityPID
@@ -151,7 +152,7 @@ float position = 0;
 
 // velocity
 float rpm = 0;
-float velocity_max = 20000;
+float velocity_max = 42000;
 float max_velocity = 0;
 float velocity_start = 0;
 float velocity_end = 0;
@@ -159,7 +160,7 @@ float velocity_triangle = 0;
 float velocity = 0;
 
 // acceleration
-float acceleration_max = 10000;
+float acceleration_max = 150000;
 float acceleration = 0;
 
 // time
@@ -180,7 +181,10 @@ float setpoint_now = 0;
 uint32_t QEIReadPosition;
 
 float velocity_check = 0;
-float velocity_check_filter = 0;
+float velocity_check_filter_now = 0;
+float velocity_check_filter_past = 0;
+float acceleration_check = 0;
+float acceleration_check_filter = 0;
 
 float duty = 500;
 int reset = 0;
@@ -221,6 +225,7 @@ static void MX_TIM1_Init(void);
 static void MX_TIM5_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_TIM2_Init(void);
+static void MX_TIM9_Init(void);
 /* USER CODE BEGIN PFP */
 
 inline uint64_t micros();
@@ -245,7 +250,7 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
 
-	C = ComputeLowpassConstant(1000, 5000);
+ 	C = ComputeLowpassConstant(1000, 5000);
 	// C1 = ComputeLowpassConstant(1000, 5000);
   /* USER CODE END 1 */
 
@@ -273,6 +278,7 @@ int main(void)
   MX_TIM5_Init();
   MX_ADC1_Init();
   MX_TIM2_Init();
+  MX_TIM9_Init();
   /* USER CODE BEGIN 2 */
 
 	HAL_TIM_Base_Start(&htim1);
@@ -282,6 +288,8 @@ int main(void)
 
 	HAL_TIM_Base_Start_IT(&htim5);
 
+	HAL_TIM_Base_Start_IT(&htim9);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -290,22 +298,22 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-		static uint64_t timestamp = 0;
-		time  = micros();
-		if (time > timestamp) {
-			timestamp += 100;
-			dt = 0.0001;
-			Distance();
-			Trajectory();
-//			velocity_check = (QEIReadRaw_now - QEIReadRaw_past)/dt;
-//		  PositionControlPID();
-			QEIReadRaw_now = __HAL_TIM_GET_COUNTER(&htim2);
-//			PositionControlPID();
-			VelocityControlPID();
-//			velocity_check = (QEIReadRaw_now - QEIReadRaw_past)/dt;
-//			velocity_check_filter = (C * velocity_check) + ((1-C)*velocity_check_filter);
-			motor(voltage);
-//			QEIReadRaw_past = QEIReadRaw_now;
+//		static uint64_t timestamp = 0;
+//		time  = micros();
+//		if (time > timestamp) {
+//			timestamp += 100;
+//			dt = 0.0001;
+//			Distance();
+//			Trajectory();
+////			velocity_check = (QEIReadRaw_now - QEIReadRaw_past)/dt;
+////		  PositionControlPID();
+//			QEIReadRaw_now = __HAL_TIM_GET_COUNTER(&htim2);
+////			PositionControlPID();
+//			VelocityControlPID();
+////			velocity_check = (QEIReadRaw_now - QEIReadRaw_past)/dt;
+////			velocity_check_filter = (C * velocity_check) + ((1-C)*velocity_check_filter);
+//			motor(voltage);
+////			QEIReadRaw_past = QEIReadRaw_now;
 
 		}
 
@@ -332,7 +340,7 @@ int main(void)
 //		  VelocityControlPID();
 //		  Drivemotor();
 //	  }
-	}
+//	}
   /* USER CODE END 3 */
 }
 
@@ -653,6 +661,44 @@ static void MX_TIM5_Init(void)
 }
 
 /**
+  * @brief TIM9 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM9_Init(void)
+{
+
+  /* USER CODE BEGIN TIM9_Init 0 */
+
+  /* USER CODE END TIM9_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+
+  /* USER CODE BEGIN TIM9_Init 1 */
+
+  /* USER CODE END TIM9_Init 1 */
+  htim9.Instance = TIM9;
+  htim9.Init.Prescaler = 9;
+  htim9.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim9.Init.Period = 1000-1;
+  htim9.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim9.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim9) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim9, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM9_Init 2 */
+
+  /* USER CODE END TIM9_Init 2 */
+
+}
+
+/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -780,7 +826,7 @@ void VelocityControlPID()
 void PositionControlPID()
 {
 	// error position
-	Position.error[0] = position - QEIReadRaw_now;
+	Position.error[0] = velocity_setpoint - QEIReadRaw_now;
 
 	// first error
 	first_error_position = (Kp_position + Ki_position + Kd_position) * Position.error[0];
@@ -886,6 +932,17 @@ void Trajectory()
 	velocity_setpoint = position;
 }
 
+void velo_acc()
+{
+	velocity_check = (QEIReadRaw_now - QEIReadRaw_past)/dt;
+	velocity_check_filter_now = (C * velocity_check) + ((1-C)*velocity_check_filter_now);
+
+	acceleration_check = (velocity_check_filter_now - velocity_check_filter_past)/dt;
+	acceleration_check_filter = (C * acceleration_check) + ((1-C)*acceleration_check_filter);
+
+	velocity_check_filter_past = velocity_check_filter_now;
+}
+
 
 
 void motor(float voltage) {
@@ -913,9 +970,20 @@ void motor(float voltage) {
 
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-	if (htim == &htim5) {
-		if (time_flag) _micros += UINT32_MAX;
-		time_flag = 1;
+//	if (htim == &htim5) {
+//		if (time_flag) _micros += UINT32_MAX;
+//		time_flag = 1;
+//	}
+	if (htim == &htim9)
+	{
+		Distance();
+		Trajectory();
+		QEIReadRaw_now = __HAL_TIM_GET_COUNTER(&htim2);
+		VelocityControlPID();
+		motor(voltage);
+		velo_acc();
+		QEIReadRaw_past = QEIReadRaw_now;
+
 	}
 }
 
