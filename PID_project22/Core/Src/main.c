@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
+//#include "trajectory_trapezoidal.h"
 #include "user_function.h"
 #include "math.h"
 
@@ -133,6 +134,9 @@ float velocity_now = 0;
 float velocity_past = 0;
 float velocity_setpoint = 0;
 
+
+float acceleration_setpoint = 0;
+
 // trajectory
 // position
 float position_acc = 0;
@@ -176,6 +180,7 @@ float time_err;
 
 float setpoint_past = 0;
 float setpoint_now = 0;
+float setpoint = 0;
 
 //bababababa
 uint32_t QEIReadPosition;
@@ -212,7 +217,9 @@ float C = 0;
 int32_t QEIReadRaw_now;
 int32_t QEIReadRaw_past;
 float voltage = 0;
-int32_t setpoint = 0;
+//int32_t setpoint = 0;
+
+int flagtime = 0;
 
 /* USER CODE END PV */
 
@@ -229,9 +236,7 @@ static void MX_TIM9_Init(void);
 /* USER CODE BEGIN PFP */
 
 inline uint64_t micros();
-void Trajectory();
 void motor(float voltage);
-void Distance();
 void VelocityControlPID();
 void PositionControlPID();
 
@@ -799,7 +804,7 @@ static void MX_GPIO_Init(void)
 	//PID windup
 void VelocityControlPID()
 {
-	Velocity.error[0] = velocity_setpoint - QEIReadRaw_now;
+	Velocity.error[0] = position_setpoint - QEIReadRaw_now;
 
 	// last term of volt
 
@@ -826,7 +831,7 @@ void VelocityControlPID()
 void PositionControlPID()
 {
 	// error position
-	Position.error[0] = velocity_setpoint - QEIReadRaw_now;
+	Position.error[0] = position_setpoint - QEIReadRaw_now;
 
 	// first error
 	first_error_position = (Kp_position + Ki_position + Kd_position) * Position.error[0];
@@ -929,7 +934,7 @@ void Trajectory()
 		time_trajectory = 0;
 	}
 
-	velocity_setpoint = position;
+	position_setpoint = position;
 }
 
 void velo_acc()
@@ -979,11 +984,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 		Distance();
 		Trajectory();
 		QEIReadRaw_now = __HAL_TIM_GET_COUNTER(&htim2);
-		VelocityControlPID();
 		motor(voltage);
 		velo_acc();
 		QEIReadRaw_past = QEIReadRaw_now;
 
+		static uint8_t flip = 0;
+		flip = !flip;
+		if(flip){
+			VelocityControlPID();
+		}
 	}
 }
 
