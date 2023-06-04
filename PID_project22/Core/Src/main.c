@@ -70,51 +70,37 @@ float acceleration_max = 80000;
 
 
 float position_setpoint = 0;
+float velocity_setpoint = 0;
+float acceleration_setpoint = 0;
+
 float Kp_position = 114;
 float Ki_position = 0.196;
 float Kd_position = 500;
 
 float setpoint = 0;
 
-//bababababa
-uint32_t QEIReadPosition;
 
-float velocity_check = 0;
-float velocity_check_filter_now = 0;
-float velocity_check_filter_past = 0;
-float acceleration_check = 0;
-float acceleration_check_filter = 0;
+float velocity_measure = 0;
+float velocity_measure_filter_now = 0;
+float velocity_measure_filter_past = 0;
+float acceleration_measure = 0;
+float acceleration_measure_filter = 0;
 
-float duty = 500;
-int reset = 0;
-
-float BITtoDegree = 0;
-float DegreeOfMotor = 0;
-float setposition = 0;
-float Vfeedback = 0;
-
-typedef struct _QEIStructure {
-	float data[2];
-	float QETPosition;
-} QEIStructureTypedef;
-QEIStructureTypedef QEIData = { 0 };
-
-float one = 0;
-float two = 0;
-
-float filter_position_past = 0;
-float filter_position_now = 0;
-float filter_velocity = 0;
-
-float C = 0;
+float C1 = 0;
+float C2 = 0;
 
 int32_t QEIReadRaw_now;
 int32_t QEIReadRaw_past;
 
 float voltage = 0;
-//int32_t setpoint = 0;
 
 int flagtime = 0;
+
+uint32_t Cutoff_v = 10;
+uint32_t SamplingFreq_v = 6000;
+
+uint32_t Cutoff_a = 10;
+uint32_t SamplingFreq_a = 6000;
 
 /* USER CODE END PV */
 
@@ -149,8 +135,8 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
 
- 	C = ComputeLowpassConstant(1000, 5000);
-	// C1 = ComputeLowpassConstant(1000, 5000);
+// 	C1 = ComputeLowpassConstant(Cutoff_v, SamplingFreq_v);
+//	C2 = ComputeLowpassConstant(Cutoff_a, SamplingFreq_a);
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -697,13 +683,13 @@ static void MX_GPIO_Init(void)
 
 void velo_acc()
 {
-	velocity_check = (QEIReadRaw_now - QEIReadRaw_past)/dt;
-	velocity_check_filter_now = (C * velocity_check) + ((1-C)*velocity_check_filter_now);
+	velocity_measure = (QEIReadRaw_now - QEIReadRaw_past)/dt;
+	velocity_measure_filter_now = (C1 * velocity_measure) + ((1-C1)*velocity_measure_filter_now);
 
-	acceleration_check = (velocity_check_filter_now - velocity_check_filter_past)/dt;
-	acceleration_check_filter = (C * acceleration_check) + ((1-C)*acceleration_check_filter);
+	acceleration_measure = (velocity_measure_filter_now - velocity_measure_filter_past)/dt;
+	acceleration_measure_filter = (C2 * acceleration_measure) + ((1-C2)*acceleration_measure_filter);
 
-	velocity_check_filter_past = velocity_check_filter_now;
+	velocity_measure_filter_past = velocity_measure_filter_now;
 }
 
 
@@ -739,6 +725,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 //	}
 	if (htim == &htim9)
 	{
+	 	C1 = ComputeLowpassConstant(Cutoff_v, SamplingFreq_v);
+		C2 = ComputeLowpassConstant(Cutoff_a, SamplingFreq_a);
+
 		// Variables to store the computed values
 		float position, velocity, acceleration;
 		float PID_out;
@@ -747,6 +736,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 		Trajectory(setpoint,velocity_max,acceleration_max, &position, &velocity, &acceleration);
 
 		position_setpoint = position;
+		velocity_setpoint = velocity;
+		acceleration_setpoint = acceleration;
+
 
 		QEIReadRaw_now = __HAL_TIM_GET_COUNTER(&htim2);
 		motor(voltage);

@@ -124,6 +124,7 @@ void Trajectory(float setpoint_now,float velocity_max,float acceleration_max, fl
 	if ((setpoint_now - 0.09 < position) && (position < setpoint_now + 0.09))
 	{
 		time_trajectory = 0;
+		acceleration = 0;
 	}
 
 	*position_out = position;
