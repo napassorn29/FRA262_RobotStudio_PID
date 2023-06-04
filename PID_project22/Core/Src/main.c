@@ -22,9 +22,9 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
-//#include "trajectory_trapezoidal.h"
 #include "user_function.h"
 #include "math.h"
+#include "trajectory_trapezoidal.h"
 
 /* USER CODE END Includes */
 
@@ -70,9 +70,10 @@ float I_position_term = 0;
 float D_position_term = 0;
 
 // constant
-float Kp_position = 0;
-float Ki_position = 0;
-float Kd_position = 0;
+float Kp_position = 102;
+float Ki_position = 0.163;
+float Kd_position = 600;
+
 
 // error of position
 typedef struct PositionPID
@@ -108,9 +109,9 @@ float third_error_velocity = 0;
 
 
 // constant
-float Kp_velocity = 162;
+float Kp_velocity = 114;
 //float Ki_velocity = 0;
-float Ki_velocity = 0.035;
+float Ki_velocity = 0.196;
 float Kd_velocity = 500;
 
 // error of velocity
@@ -137,50 +138,57 @@ float velocity_setpoint = 0;
 
 float acceleration_setpoint = 0;
 
-// trajectory
-// position
-float position_acc = 0;
-float position_const = 0;
-float position_dec = 0;
-float position_now_acc = 0;
-float position_now_const = 0;
-float position_now_dec = 0;
-float position_segment = 0;
-float distance = 0;
-float distance_one_travel = 0;
-float abs_distance_one_travel = 0;
-float abs_distance = 0;
-float initial_position = 0;
-float last_initial_position = 0;
-float position = 0;
 
-// velocity
-float rpm = 0;
-float velocity_max = 42000;
-float max_velocity = 0;
-float velocity_start = 0;
-float velocity_end = 0;
-float velocity_triangle = 0;
-float velocity = 0;
+float velocity_max = 34000;
+float acceleration_max = 80000;
+//// trajectory
+//// position
+//float position_acc = 0;
+//float position_const = 0;
+//float position_dec = 0;
+//float position_now_acc = 0;
+//float position_now_const = 0;
+//float position_now_dec = 0;
+//float position_segment = 0;
+//float distance = 0;
+//float distance_one_travel = 0;
+//float abs_distance_one_travel = 0;
+//float abs_distance = 0;
+//float initial_position = 0;
+//float last_initial_position = 0;
+//float position = 0;
+//
+//// velocity
+//float rpm = 0;
+//float velocity_max = 34000;
+//float max_velocity = 0;
+//float velocity_start = 0;
+//float velocity_end = 0;
+//float velocity_triangle = 0;
+//float velocity = 0;
+//
+//// acceleration
+//float acceleration_max = 80000;
+//float acceleration = 0;
+//
+//// time
+//float time_acc = 0;
+//float time_const = 0;
+//float time_dec = 0;
+//float time_total = 0;
+//float time_now = 0;
+//float time_trajectory = 0;
+//int sign = 0;
+//
+//float time_err;
+//
+//float setpoint_past = 0;
+//float setpoint_now = 0;
 
-// acceleration
-float acceleration_max = 150000;
-float acceleration = 0;
-
-// time
-float time_acc = 0;
-float time_const = 0;
-float time_dec = 0;
-float time_total = 0;
-float time_now = 0;
-float time_trajectory = 0;
-int sign = 0;
-
-float time_err;
-
-float setpoint_past = 0;
-float setpoint_now = 0;
 float setpoint = 0;
+float PID_position;
+float PID_velocity;
+float PID_acceleration;
 
 //bababababa
 uint32_t QEIReadPosition;
@@ -805,6 +813,7 @@ static void MX_GPIO_Init(void)
 void VelocityControlPID()
 {
 	Velocity.error[0] = position_setpoint - QEIReadRaw_now;
+	//Velocity.error[0] = position - QEIReadRaw_now;
 
 	// last term of volt
 
@@ -832,6 +841,7 @@ void PositionControlPID()
 {
 	// error position
 	Position.error[0] = position_setpoint - QEIReadRaw_now;
+	//Position.error[0] = PID_position - QEIReadRaw_now;
 
 	// first error
 	first_error_position = (Kp_position + Ki_position + Kd_position) * Position.error[0];
@@ -853,89 +863,89 @@ void PositionControlPID()
 }
 
 
-void Distance()
-{
-	if (setpoint_past != setpoint_now)
-	{
-		distance = setpoint_now - initial_position;
-		//initial_position = last_initial_position;
-		setpoint_past = setpoint_now;
-		if (distance >= 0)
-		{
-			sign = 1;
-			abs_distance = distance;
-		}
-		else if (distance < 0)
-		{
-			sign = -1;
-			abs_distance = distance * (-1);
-		}
-	}
-	else
-	{
-		setpoint_past = setpoint_now;
-	}
-}
+//void Distance()
+//{
+//	if (setpoint_past != setpoint_now)
+//	{
+//		distance = setpoint_now - initial_position;
+//		//initial_position = last_initial_position;
+//		setpoint_past = setpoint_now;
+//		if (distance >= 0)
+//		{
+//			sign = 1;
+//			abs_distance = distance;
+//		}
+//		else if (distance < 0)
+//		{
+//			sign = -1;
+//			abs_distance = distance * (-1);
+//		}
+//	}
+//	else
+//	{
+//		setpoint_past = setpoint_now;
+//	}
+//}
 
 
-void Trajectory()
-{
-	// Define pattern of trapezoidal_trajectory
-	if (abs_distance > ((velocity_max * velocity_max)/acceleration_max))
-	{
-	    time_acc = ((velocity_max - 0)/acceleration_max);
-	    time_const = ((1.0 / velocity_max)* ((abs_distance)- ((velocity_max * velocity_max) / acceleration_max)));
-		time_total = (2 * time_acc) + (abs_distance -(velocity_max * velocity_max)/acceleration_max) / velocity_max;
-		max_velocity = velocity_max * sign;
-	}
-
-	else
-	{
-		time_acc = sqrt(abs_distance/acceleration_max);
-		time_total = time_acc * 2;
-		time_const = 0;
-		position_const = 0;
-		max_velocity = acceleration_max * time_acc *sign;
-	}
-
-	//acceleration segment
-	if ((0 <= time_trajectory) && (time_trajectory < time_acc))
-	{
-		time_trajectory += 0.0001;
-	    position = initial_position + (0.5 * acceleration_max * (time_trajectory * time_trajectory)*sign);
-	    velocity = (acceleration_max * time_trajectory *sign);
-	    position_acc = position;
-	    acceleration = acceleration_max * sign;
-	}
-
-	//constant segment
-	else if ((time_trajectory) < (time_total - time_acc))
-	{
-		time_trajectory += 0.0001;
-		position = position_acc + (max_velocity * (time_trajectory - time_acc));
-	    position_const = position - position_acc;
-		velocity = (max_velocity);
-	    acceleration = 0;
-	}
-
-	//deceleration segment
-	else if (((time_total - time_acc) <= time_trajectory) && (time_trajectory < time_total))
-	{
-		time_trajectory += 0.0001;
-		time_err = (time_trajectory - (time_acc + time_const));
-		position = position_acc + position_const + (max_velocity * time_err) + (0.5 *(-1)* acceleration_max * (time_err * time_err) * sign);
-	    velocity = (- acceleration_max * sign * time_err) + (max_velocity) ; ;
-	    acceleration = - acceleration_max * sign;
-	    initial_position = position;
-	}
-
-	if ((setpoint_now - 0.09 < position) && (position < setpoint_now + 0.09))
-	{
-		time_trajectory = 0;
-	}
-
-	position_setpoint = position;
-}
+//void Trajectory()
+//{
+//	// Define pattern of trapezoidal_trajectory
+//	if (abs_distance > ((velocity_max * velocity_max)/acceleration_max))
+//	{
+//	    time_acc = ((velocity_max - 0)/acceleration_max);
+//	    time_const = ((1.0 / velocity_max)* ((abs_distance)- ((velocity_max * velocity_max) / acceleration_max)));
+//		time_total = (2 * time_acc) + (abs_distance -(velocity_max * velocity_max)/acceleration_max) / velocity_max;
+//		max_velocity = velocity_max * sign;
+//	}
+//
+//	else
+//	{
+//		time_acc = sqrt(abs_distance/acceleration_max);
+//		time_total = time_acc * 2;
+//		time_const = 0;
+//		position_const = 0;
+//		max_velocity = acceleration_max * time_acc *sign;
+//	}
+//
+//	//acceleration segment
+//	if ((0 <= time_trajectory) && (time_trajectory < time_acc))
+//	{
+//		time_trajectory += 0.0001;
+//	    position = initial_position + (0.5 * acceleration_max * (time_trajectory * time_trajectory)*sign);
+//	    velocity = (acceleration_max * time_trajectory *sign);
+//	    position_acc = position;
+//	    acceleration = acceleration_max * sign;
+//	}
+//
+//	//constant segment
+//	else if ((time_trajectory) < (time_total - time_acc))
+//	{
+//		time_trajectory += 0.0001;
+//		position = position_acc + (max_velocity * (time_trajectory - time_acc));
+//	    position_const = position - position_acc;
+//		velocity = (max_velocity);
+//	    acceleration = 0;
+//	}
+//
+//	//deceleration segment
+//	else if (((time_total - time_acc) <= time_trajectory) && (time_trajectory < time_total))
+//	{
+//		time_trajectory += 0.0001;
+//		time_err = (time_trajectory - (time_acc + time_const));
+//		position = position_acc + position_const + (max_velocity * time_err) + (0.5 *(-1)* acceleration_max * (time_err * time_err) * sign);
+//	    velocity = (- acceleration_max * sign * time_err) + (max_velocity) ; ;
+//	    acceleration = - acceleration_max * sign;
+//	    initial_position = position;
+//	}
+//
+//	if ((setpoint_now - 0.09 < position) && (position < setpoint_now + 0.09))
+//	{
+//		time_trajectory = 0;
+//	}
+//
+//	position_setpoint = position;
+//}
 
 void velo_acc()
 {
@@ -981,18 +991,25 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 //	}
 	if (htim == &htim9)
 	{
-		Distance();
-		Trajectory();
+		// Variables to store the computed values
+		float position, velocity, acceleration;
+
+		// Call the Trajectory function
+		Trajectory(setpoint,velocity_max,acceleration_max, &position, &velocity, &acceleration);
+
+		position_setpoint = position;
+
 		QEIReadRaw_now = __HAL_TIM_GET_COUNTER(&htim2);
 		motor(voltage);
 		velo_acc();
 		QEIReadRaw_past = QEIReadRaw_now;
 
 		static uint8_t flip = 0;
-		flip = !flip;
-		if(flip){
+		flip = flip%5;
+		if(flip == 0){
 			VelocityControlPID();
 		}
+		flip += 1;
 	}
 }
 
