@@ -32,33 +32,6 @@ float target = 0;
 
 // USER CODE ======================================================================================
 
-
-//void Distance(float setpoint_now)
-//{
-//	static float setpoint_past = 0;
-//	static float distance = 0;
-//	if (setpoint_past != setpoint_now)
-//	{
-//		distance = setpoint_now - initial_position;
-//		setpoint_past = setpoint_now;
-//		if (distance >= 0)
-//		{
-//			sign = 1;
-//			abs_distance = distance;
-//		}
-//		else if (distance < 0)
-//		{
-//			sign = -1;
-//			abs_distance = distance * (-1);
-//		}
-//	}
-//	else
-//	{
-//		setpoint_past = setpoint_now;
-//	}
-//}
-
-
 void Trajectory(float setpoint_now,float velocity_max,float acceleration_max, float *position_out, float *velocity_out, float *acceleration_out)
 {
 	// velocity

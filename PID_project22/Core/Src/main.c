@@ -25,6 +25,7 @@
 #include "user_function.h"
 #include "math.h"
 #include "trajectory_trapezoidal.h"
+#include "PIDControl.h"
 
 /* USER CODE END Includes */
 
@@ -63,132 +64,17 @@ uint64_t _micros = 0;
 uint64_t time = 0;
 uint8_t time_flag = 0;
 
-//position
-// PID position term
-float P_position_term = 0;
-float I_position_term = 0;
-float D_position_term = 0;
-
-// constant
-float Kp_position = 102;
-float Ki_position = 0.163;
-float Kd_position = 600;
-
-
-// error of position
-typedef struct PositionPID
-{
-	float error[3];
-	float voltage[2];
-
-}PositionPIDStructure;
-PositionPIDStructure Position = {0};
-float first_error_position = 0;
-float second_error_position = 0;
-float third_error_position = 0;
-
-// position
-float position_now = 0;
-float position_past = 0;
-float position_setpoint = 0;
-
-//integrate position
-float integrate_position = 0;
-float PID_position_total = 0;
-float Duty_feedback_position = 0;
-
-//velocity
-// PID velocity term
-float P_velocity_term = 0;
-float I_velocity_term = 0;
-float D_velocity_term = 0;
-
-float first_error_velocity = 0;
-float second_error_velocity = 0;
-float third_error_velocity = 0;
-
-
-// constant
-float Kp_velocity = 114;
-//float Ki_velocity = 0;
-float Ki_velocity = 0.196;
-float Kd_velocity = 500;
-
-// error of velocity
-typedef struct VelocityPID
-{
-	float error[3];
-	float voltage[2];
-
-}VelocityPIDstructure;
-VelocityPIDstructure Velocity = {0};
-float error_velocity;
-
-
-//integrate velocity
-float integrate_velocity = 0;
-float PID_velocity_total = 0;
-float Duty_feedback_velocity = 0;
-
-// velocity
-float velocity_now = 0;
-float velocity_past = 0;
-float velocity_setpoint = 0;
-
-
-float acceleration_setpoint = 0;
-
 
 float velocity_max = 34000;
 float acceleration_max = 80000;
-//// trajectory
-//// position
-//float position_acc = 0;
-//float position_const = 0;
-//float position_dec = 0;
-//float position_now_acc = 0;
-//float position_now_const = 0;
-//float position_now_dec = 0;
-//float position_segment = 0;
-//float distance = 0;
-//float distance_one_travel = 0;
-//float abs_distance_one_travel = 0;
-//float abs_distance = 0;
-//float initial_position = 0;
-//float last_initial_position = 0;
-//float position = 0;
-//
-//// velocity
-//float rpm = 0;
-//float velocity_max = 34000;
-//float max_velocity = 0;
-//float velocity_start = 0;
-//float velocity_end = 0;
-//float velocity_triangle = 0;
-//float velocity = 0;
-//
-//// acceleration
-//float acceleration_max = 80000;
-//float acceleration = 0;
-//
-//// time
-//float time_acc = 0;
-//float time_const = 0;
-//float time_dec = 0;
-//float time_total = 0;
-//float time_now = 0;
-//float time_trajectory = 0;
-//int sign = 0;
-//
-//float time_err;
-//
-//float setpoint_past = 0;
-//float setpoint_now = 0;
+
+
+float position_setpoint = 0;
+float Kp_position = 114;
+float Ki_position = 0.196;
+float Kd_position = 500;
 
 float setpoint = 0;
-float PID_position;
-float PID_velocity;
-float PID_acceleration;
 
 //bababababa
 uint32_t QEIReadPosition;
@@ -224,6 +110,7 @@ float C = 0;
 
 int32_t QEIReadRaw_now;
 int32_t QEIReadRaw_past;
+
 float voltage = 0;
 //int32_t setpoint = 0;
 
@@ -245,8 +132,7 @@ static void MX_TIM9_Init(void);
 
 inline uint64_t micros();
 void motor(float voltage);
-void VelocityControlPID();
-void PositionControlPID();
+
 
 /* USER CODE END PFP */
 
@@ -809,144 +695,6 @@ static void MX_GPIO_Init(void)
 //}
 
 
-	//PID windup
-void VelocityControlPID()
-{
-	Velocity.error[0] = position_setpoint - QEIReadRaw_now;
-	//Velocity.error[0] = position - QEIReadRaw_now;
-
-	// last term of volt
-
-	// first error
-	first_error_velocity = (Kp_velocity + Ki_velocity + Kd_velocity) * Velocity.error[0];
-
-	// second error
-	second_error_velocity = (Kp_velocity + (2 * Kd_velocity)) * Velocity.error[1];
-
-	// third error
-	third_error_velocity = (Kd_velocity) * Velocity.error[2];
-
-	// voltage
-	Velocity.voltage[0] += first_error_velocity - second_error_velocity + third_error_velocity;
-	voltage = Velocity.voltage[0];
-
-	// set present to past
-	Velocity.error[2] = Velocity.error[1];
-	Velocity.error[1] = Velocity.error[0];
-
-}
-
-	//PID windup
-void PositionControlPID()
-{
-	// error position
-	Position.error[0] = position_setpoint - QEIReadRaw_now;
-	//Position.error[0] = PID_position - QEIReadRaw_now;
-
-	// first error
-	first_error_position = (Kp_position + Ki_position + Kd_position) * Position.error[0];
-
-	// second error
-	second_error_position = (Kp_position + (2 * Kd_position)) * Position.error[1];
-
-	// third error
-	third_error_position = (Kd_position) * Position.error[3];
-
-	// voltage
-	Position.voltage[0] += first_error_position - second_error_position + third_error_position;
-	voltage = Position.voltage[0];
-
-	// set present to past
-	Position.error[2] = Position.error[1];
-	Position.error[1] = Position.error[0];
-
-}
-
-
-//void Distance()
-//{
-//	if (setpoint_past != setpoint_now)
-//	{
-//		distance = setpoint_now - initial_position;
-//		//initial_position = last_initial_position;
-//		setpoint_past = setpoint_now;
-//		if (distance >= 0)
-//		{
-//			sign = 1;
-//			abs_distance = distance;
-//		}
-//		else if (distance < 0)
-//		{
-//			sign = -1;
-//			abs_distance = distance * (-1);
-//		}
-//	}
-//	else
-//	{
-//		setpoint_past = setpoint_now;
-//	}
-//}
-
-
-//void Trajectory()
-//{
-//	// Define pattern of trapezoidal_trajectory
-//	if (abs_distance > ((velocity_max * velocity_max)/acceleration_max))
-//	{
-//	    time_acc = ((velocity_max - 0)/acceleration_max);
-//	    time_const = ((1.0 / velocity_max)* ((abs_distance)- ((velocity_max * velocity_max) / acceleration_max)));
-//		time_total = (2 * time_acc) + (abs_distance -(velocity_max * velocity_max)/acceleration_max) / velocity_max;
-//		max_velocity = velocity_max * sign;
-//	}
-//
-//	else
-//	{
-//		time_acc = sqrt(abs_distance/acceleration_max);
-//		time_total = time_acc * 2;
-//		time_const = 0;
-//		position_const = 0;
-//		max_velocity = acceleration_max * time_acc *sign;
-//	}
-//
-//	//acceleration segment
-//	if ((0 <= time_trajectory) && (time_trajectory < time_acc))
-//	{
-//		time_trajectory += 0.0001;
-//	    position = initial_position + (0.5 * acceleration_max * (time_trajectory * time_trajectory)*sign);
-//	    velocity = (acceleration_max * time_trajectory *sign);
-//	    position_acc = position;
-//	    acceleration = acceleration_max * sign;
-//	}
-//
-//	//constant segment
-//	else if ((time_trajectory) < (time_total - time_acc))
-//	{
-//		time_trajectory += 0.0001;
-//		position = position_acc + (max_velocity * (time_trajectory - time_acc));
-//	    position_const = position - position_acc;
-//		velocity = (max_velocity);
-//	    acceleration = 0;
-//	}
-//
-//	//deceleration segment
-//	else if (((time_total - time_acc) <= time_trajectory) && (time_trajectory < time_total))
-//	{
-//		time_trajectory += 0.0001;
-//		time_err = (time_trajectory - (time_acc + time_const));
-//		position = position_acc + position_const + (max_velocity * time_err) + (0.5 *(-1)* acceleration_max * (time_err * time_err) * sign);
-//	    velocity = (- acceleration_max * sign * time_err) + (max_velocity) ; ;
-//	    acceleration = - acceleration_max * sign;
-//	    initial_position = position;
-//	}
-//
-//	if ((setpoint_now - 0.09 < position) && (position < setpoint_now + 0.09))
-//	{
-//		time_trajectory = 0;
-//	}
-//
-//	position_setpoint = position;
-//}
-
 void velo_acc()
 {
 	velocity_check = (QEIReadRaw_now - QEIReadRaw_past)/dt;
@@ -993,6 +741,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 	{
 		// Variables to store the computed values
 		float position, velocity, acceleration;
+		float PID_out;
 
 		// Call the Trajectory function
 		Trajectory(setpoint,velocity_max,acceleration_max, &position, &velocity, &acceleration);
@@ -1007,7 +756,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 		static uint8_t flip = 0;
 		flip = flip%5;
 		if(flip == 0){
-			VelocityControlPID();
+			PositionControlPID(position_setpoint, QEIReadRaw_now, Kp_position, Ki_position, Kd_position, &PID_out);
+			voltage = PID_out;
 		}
 		flip += 1;
 	}
