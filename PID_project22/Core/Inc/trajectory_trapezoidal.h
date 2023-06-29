@@ -14,7 +14,7 @@
 
 // PRIVATE FUNCTION PROTOTYPE =====================================================================
 
-void Trajectory(float setpoint_now,float velocity_max,float acceleration_max, float *position_out, float *velocity_out, float *acceleration_out);
+void Trajectory(float setpoint_now,float velocity_max,float acceleration_max, int *position_out, float *velocity_out, float *acceleration_out);
 
 // USER CODE END ==================================================================================
 

@@ -32,7 +32,7 @@ float target = 0;
 
 // USER CODE ======================================================================================
 
-void Trajectory(float setpoint_now,float velocity_max,float acceleration_max, float *position_out, float *velocity_out, float *acceleration_out)
+void Trajectory(float setpoint_now,float velocity_max,float acceleration_max, int *position_out, float *velocity_out, float *acceleration_out)
 {
 	// velocity
 	static float max_velocity = 0;
@@ -120,6 +120,8 @@ void Trajectory(float setpoint_now,float velocity_max,float acceleration_max, fl
 	    acceleration = - acceleration_max * sign;
 	    initial_position = position;
 	}
+
+	position = (int)position;
 
 	if ((setpoint_now - 0.09 < position) && (position < setpoint_now + 0.09))
 	{

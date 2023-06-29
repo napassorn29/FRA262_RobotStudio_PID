@@ -8,15 +8,15 @@
   */
 /* USER CODE END Header */
 
-#ifndef USER_FUNCTION
-#define USER_FUNCTION
+#ifndef LOWPASSFILTER
+#define LOWPASSFILTER
 
 #include "main.h"
 #include "stdio.h"
 #include "string.h"
 
-void blink(GPIO_TypeDef * GPIOx, uint16_t GPIO_PIN_x, uint16_t Rate);
-
 float ComputeLowpassConstant(uint16_t CutoffFreq, uint16_t SamplingFreq);
+
+void lowpass_filter(float QEIReadRaw_now, float *velocity_measure_filter_now, float *acceleration_measure_filter);
 
 #endif

@@ -17,12 +17,13 @@
  */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
+//#include <LowpassFilter.h>
 #include "main.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
-#include "user_function.h"
+#include "LowpassFilter.h"
 #include "math.h"
 #include "trajectory_trapezoidal.h"
 #include "PIDControl.h"
@@ -56,6 +57,9 @@ UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 
+float velo_filter = 0;
+float acc_filter = 0;
+
 float position_milli = 0;
 
 // time
@@ -69,12 +73,12 @@ float velocity_max = 34000;
 float acceleration_max = 80000;
 
 
-float position_setpoint = 0;
+int position_setpoint = 0;
 float velocity_setpoint = 0;
 float acceleration_setpoint = 0;
 
 float Kp_position = 114;
-float Ki_position = 0.196;
+float Ki_position = 0.196;//0.345
 float Kd_position = 500;
 
 float setpoint = 0;
@@ -96,11 +100,11 @@ float voltage = 0;
 
 int flagtime = 0;
 
-uint32_t Cutoff_v = 10;
-uint32_t SamplingFreq_v = 6000;
+uint32_t Cutoff_v = 20;
+uint32_t SamplingFreq_v = 10000;
 
-uint32_t Cutoff_a = 10;
-uint32_t SamplingFreq_a = 6000;
+uint32_t Cutoff_a = 9;
+uint32_t SamplingFreq_a = 10000;
 
 /* USER CODE END PV */
 
@@ -725,11 +729,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 //	}
 	if (htim == &htim9)
 	{
-	 	C1 = ComputeLowpassConstant(Cutoff_v, SamplingFreq_v);
-		C2 = ComputeLowpassConstant(Cutoff_a, SamplingFreq_a);
+//	 	C1 = ComputeLowpassConstant(Cutoff_v, SamplingFreq_v);
+//		C2 = ComputeLowpassConstant(Cutoff_a, SamplingFreq_a);
 
 		// Variables to store the computed values
-		float position, velocity, acceleration;
+		int position;
+		float velocity, acceleration;
 		float PID_out;
 
 		// Call the Trajectory function
@@ -739,10 +744,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 		velocity_setpoint = velocity;
 		acceleration_setpoint = acceleration;
 
-
 		QEIReadRaw_now = __HAL_TIM_GET_COUNTER(&htim2);
 		motor(voltage);
-		velo_acc();
+
+		float velocity_measure_filter_now, acceleration_measure_filter;
+		lowpass_filter(QEIReadRaw_now, &velocity_measure_filter_now, &acceleration_measure_filter);
+
+		velo_filter = velocity_measure_filter_now;
+		acc_filter = acceleration_measure_filter;
+
 		QEIReadRaw_past = QEIReadRaw_now;
 
 		static uint8_t flip = 0;
